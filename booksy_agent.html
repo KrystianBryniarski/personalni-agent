@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Raportowy — PERSONALNI Studio Treningu</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --green:#126f43;
+      --green-hover:#0e5c37;
+      --green-light:#e6f0eb;
+      --green-mid:#c8ddd1;
+      --bg:#f7f6f3;
+      --white:#ffffff;
+      --text:#000000;
+      --text2:#3a3a38;
+      --text3:#7a7a76;
+      --border:#e0deda;
+      --border2:#cac9c4;
+      --r:4px;
+      --rl:6px;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.6;}
+
+    header{background:var(--white);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:14px;height:62px;position:sticky;top:0;z-index:10;}
+    .logo-wrap{display:flex;align-items:center;gap:10px;}
+    .logo-p{width:30px;height:30px;background:var(--green);border-radius:3px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:16px;letter-spacing:-.02em;flex-shrink:0;}
+    .logo-names{display:flex;flex-direction:column;line-height:1.15;}
+    .logo-main{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.05em;text-transform:uppercase;}
+    .logo-sub{font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;}
+    .key-badge{margin-left:auto;font-size:11.5px;padding:4px 12px;border-radius:20px;font-weight:500;}
+    .key-active{background:var(--green-light);color:var(--green);}
+    .key-inactive{background:var(--bg);color:var(--text3);border:1px solid var(--border);}
+
+    .layout{display:flex;min-height:calc(100vh - 62px);}
+
+    nav{width:208px;flex-shrink:0;background:var(--white);border-right:1px solid var(--border);padding:1.5rem 0.75rem;display:flex;flex-direction:column;gap:2px;}
+    .nav-group{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:6px 10px 4px;margin-top:10px;}
+    .nav-group:first-child{margin-top:0;}
+    .ni{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r);font-size:13.5px;color:var(--text2);cursor:pointer;border:none;background:transparent;width:100%;text-align:left;transition:background .1s,color .1s;}
+    .ni:hover{background:var(--green-light);color:var(--green);}
+    .ni.active{background:var(--green-light);color:var(--green);font-weight:600;}
+
+    main{flex:1;padding:2rem;max-width:920px;}
+    .view{display:none;}.view.active{display:block;}
+    .page-title{font-size:17px;font-weight:700;margin-bottom:1.5rem;letter-spacing:-.01em;}
+
+    .card{background:var(--white);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;margin-bottom:1rem;}
+    .clabel{font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.85rem;}
+
+    input[type=text],input[type=password],input[type=date],select,textarea{
+      background:var(--white);border:1px solid var(--border2);border-radius:var(--r);
+      color:var(--text);font-size:13.5px;padding:8px 12px;font-family:inherit;
+      width:100%;outline:none;transition:border-color .15s,box-shadow .15s;
+    }
+    input[type=date]{width:auto;}
+    input:focus,select:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(18,111,67,.1);}
+
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:var(--r);font-size:13.5px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:opacity .15s,transform .1s;letter-spacing:.01em;}
+    .btn:active{transform:scale(.98);}
+    .btn-green{background:var(--green);color:white;}
+    .btn-green:hover{background:var(--green-hover);}
+    .btn-outline{background:transparent;color:var(--text2);border:1px solid var(--border2);}
+    .btn-outline:hover{background:var(--bg);}
+    .btn-full{width:100%;justify-content:center;padding:11px;font-size:14px;margin-top:.75rem;}
+
+    .infonote{background:var(--green-light);border:1px solid var(--green-mid);color:var(--green);border-radius:var(--r);padding:10px 14px;font-size:13px;margin-bottom:1rem;line-height:1.5;}
+
+    .drop-zone{border:2px dashed var(--border2);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:background .15s,border-color .15s;margin-bottom:1rem;}
+    .drop-zone:hover,.drop-zone.drag{background:var(--green-light);border-color:var(--green);}
+    .drop-icon{font-size:26px;margin-bottom:.5rem;}
+    .drop-title{font-size:14.5px;font-weight:600;margin-bottom:4px;}
+    .drop-sub{font-size:12.5px;color:var(--text3);}
+
+    .file-list{display:flex;flex-direction:column;gap:5px;margin-bottom:1rem;}
+    .frow{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);font-size:13px;}
+    .fdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+    .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
+    .ftype{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--green-light);color:var(--green);font-weight:500;flex-shrink:0;}
+    .fdel{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;flex-shrink:0;}
+    .fdel:hover{color:#c00;}
+
+    .sbar{display:flex;gap:14px;align-items:center;padding:10px 14px;background:var(--green-light);border:1px solid var(--green-mid);border-radius:var(--r);font-size:13px;margin-bottom:1rem;flex-wrap:wrap;}
+    .sbi{display:flex;flex-direction:column;align-items:center;}
+    .sbv{font-size:18px;font-weight:700;color:var(--green);}
+    .sbl{font-size:10.5px;color:var(--text3);}
+    .vsep{width:1px;height:28px;background:var(--green-mid);}
+
+    .mgrid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:1rem;}
+    .mgrid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1rem;}
+    .mc{background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:1rem;}
+    .mlbl{font-size:11px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;}
+    .mval{font-size:22px;font-weight:700;color:var(--text);}
+    .msub{font-size:12px;margin-top:3px;}
+    .good{color:var(--green);}.bad{color:#c0392b;}.neutral{color:var(--text3);}
+
+    .brow{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+    .blbl{font-size:13px;color:var(--text2);width:170px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .btrack{flex:1;height:7px;background:var(--bg);border:1px solid var(--border);border-radius:20px;overflow:hidden;}
+    .bfill{height:100%;border-radius:20px;}
+    .bval{font-size:12px;width:90px;text-align:right;flex-shrink:0;color:var(--text2);}
+
+    .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;}
+    .pg{background:var(--green-light);color:var(--green);}
+    .pr{background:#fdecea;color:#c0392b;}
+    .pa{background:#fef3e2;color:#b7650a;}
+    .pp{background:var(--bg);color:var(--text3);border:1px solid var(--border);}
+
+    .chat-area{border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;min-height:220px;max-height:540px;overflow-y:auto;background:var(--white);margin-bottom:.75rem;font-size:14px;line-height:1.75;}
+    .ma{margin-bottom:1rem;color:var(--text);padding-bottom:1rem;border-bottom:1px solid var(--border);}
+    .ma:last-child{border-bottom:none;padding-bottom:0;}
+    .ma strong{font-weight:600;}
+    .mu{margin-bottom:.75rem;color:var(--text3);text-align:right;font-size:12.5px;font-style:italic;}
+
+    .ci-row{display:flex;gap:8px;margin-bottom:.75rem;}
+    .ci-row input{flex:1;}
+
+    .rtgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1.25rem;}
+    .rtcard{border:1px solid var(--border);border-radius:var(--rl);padding:1rem;cursor:pointer;text-align:center;background:var(--white);transition:border-color .15s,background .15s;}
+    .rtcard:hover{border-color:var(--green);background:var(--green-light);}
+    .rtcard.active{border:2px solid var(--green);background:var(--green-light);}
+    .rtcard.active .rtitle{color:var(--green);}
+    .ricon{font-size:20px;margin-bottom:6px;}
+    .rtitle{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
+    .rsub{font-size:11px;color:var(--text3);}
+
+    .dr-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:.5rem;}
+    .dr-row label{font-size:13px;color:var(--text2);white-space:nowrap;}
+
+    .dtable{width:100%;border-collapse:collapse;font-size:13px;}
+    .dtable th{text-align:left;padding:7px 8px;color:var(--text3);border-bottom:1px solid var(--border);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;}
+    .dtable td{padding:7px 8px;border-bottom:1px solid var(--border);}
+    .dtable tr:last-child td{border-bottom:none;}
+
+    .empty{text-align:center;padding:2rem;color:var(--text3);font-size:14px;}
+
+    .spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    .srow{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13.5px;color:var(--text2);line-height:1.5;}
+    .srow:last-child{border-bottom:none;}
+    .sbadge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--green);color:white;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;}
+    .hl{color:var(--text);font-weight:600;}
+
+    .hgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:.5rem;}
+    .hcell{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:4px 2px;text-align:center;font-size:11px;}
+    .hnum{font-weight:700;font-size:14px;color:var(--text);}
+    .hlbl{color:var(--text3);font-size:10px;margin-top:2px;}
+
+    @media(max-width:640px){nav{display:none;}main{padding:1rem;}.mgrid4{grid-template-columns:1fr 1fr;}.rtgrid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <div class="logo-p">P</div>
+    <div class="logo-names">
+      <span class="logo-main">Personalni</span>
+      <span class="logo-sub">Studio Treningu</span>
+    </div>
+  </div>
+  <span class="key-badge key-inactive" id="key-indicator">Brak klucza API</span>
+</header>
+
+<div class="layout">
+  <nav>
+    <div class="nav-group">Konfiguracja</div>
+    <button class="ni active" onclick="sv('ustawienia',this)">🔑 Ustawienia</button>
+    <button class="ni" onclick="sv('import',this)">📂 Wgraj pliki</button>
+    <div class="nav-group">Dane</div>
+    <button class="ni" onclick="sv('podsumowanie',this)">📊 Podsumowanie</button>
+    <button class="ni" onclick="sv('pracownicy',this)">👤 Pracownicy</button>
+    <button class="ni" onclick="sv('uslugi',this)">🎯 Usługi</button>
+    <button class="ni" onclick="sv('klienci',this)">👥 Klienci</button>
+    <div class="nav-group">Google Drive</div>
+    <button class="ni" onclick="sv('drive',this)">☁️ Połącz z Drive</button>
+    <div class="nav-group">AI</div>
+    <button class="ni" onclick="sv('raport',this)">🤖 Raport AI</button>
+    <div class="nav-group">Pomoc</div>
+    <button class="ni" onclick="sv('instrukcja',this)">📖 Instrukcja</button>
+  </nav>
+
+  <main>
+
+    <!-- USTAWIENIA -->
+    <div class="view active" id="view-ustawienia">
+      <p class="page-title">Ustawienia</p>
+      <div class="card">
+        <p class="clabel">Klucz API Anthropic</p>
+        <p style="font-size:13.5px;color:var(--text2);margin-bottom:12px;line-height:1.6">Wklej klucz API uzyskany na <strong>console.anthropic.com</strong> → API Keys. Klucz jest zapisywany lokalnie w Twojej przeglądarce.</p>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="password" id="api-key" placeholder="sk-ant-api03-..." oninput="document.getElementById('api-st').textContent=''">
+          <button class="btn btn-green" onclick="saveKey()" style="white-space:nowrap">Zapisz klucz</button>
+        </div>
+        <div id="api-st" style="font-size:13px;margin-top:4px"></div>
+        <p style="font-size:12px;color:var(--text3);margin-top:8px">Klucz nie jest wysyłany nigdzie poza API Anthropic.</p>
+      </div>
+      <div class="card">
+        <p class="clabel">Jak uzyskać klucz API</p>
+        <div class="srow"><span class="sbadge">1</span><span>Wejdź na <span class="hl">console.anthropic.com</span> i zaloguj się lub zarejestruj.</span></div>
+        <div class="srow"><span class="sbadge">2</span><span>W menu po lewej kliknij <span class="hl">API Keys</span>.</span></div>
+        <div class="srow"><span class="sbadge">3</span><span>Kliknij <span class="hl">Create Key</span> i nadaj mu nazwę np. "PERSONALNI raport".</span></div>
+        <div class="srow"><span class="sbadge">4</span><span>Skopiuj klucz i wklej go powyżej.</span></div>
+      </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div class="view" id="view-import">
+      <p class="page-title">Wgraj pliki</p>
+      <div class="card">
+        <p class="clabel">Pliki z Booksy</p>
+        <div class="infonote">Agent automatycznie rozpoznaje typ pliku po zawartości — nazwa pliku nie ma znaczenia. Wizyty anulowane są usuwane podczas wczytywania i nie wpływają na żadne obliczenia.</div>
+        <div class="drop-zone" id="dz" onclick="document.getElementById('fi').click()"
+          ondragover="event.preventDefault();document.getElementById('dz').classList.add('drag')"
+          ondragleave="document.getElementById('dz').classList.remove('drag')"
+          ondrop="onDrop(event)">
+          <div class="drop-icon">📂</div>
+          <div class="drop-title">Kliknij lub przeciągnij pliki tutaj</div>
+          <div class="drop-sub">.xlsx, .xls, .csv — wiele plików naraz</div>
+        </div>
+        <input type="file" id="fi" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleFiles(this.files)">
+        <div id="file-list" class="file-list"></div>
+        <div id="sbar" style="display:none" class="sbar">
+          <div class="sbi"><span class="sbv" id="sb-pliki">0</span><span class="sbl">pliki</span></div>
+          <div class="vsep"></div>
+          <div class="sbi"><span class="sbv" id="sb-wizyty">—</span><span class="sbl">wizyt zakończonych</span></div>
+          <div class="vsep"></div>
+          <div class="sbi"><span class="sbv" id="sb-klienci">—</span><span class="sbl">klientów</span></div>
+          <div style="margin-left:auto"><button class="btn btn-outline" onclick="clearAll()" style="font-size:12.5px;padding:5px 12px">Wyczyść wszystko</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATE FILTER (shared) -->
+    <div id="date-filter-bar" class="card" style="margin-bottom:1rem;display:none">
+      <p class="clabel">Zakres dat</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--text2);white-space:nowrap">Od:</label>
+        <input type="date" id="pf" oninput="updateAllSections()" style="width:auto">
+        <label style="font-size:13px;color:var(--text2);white-space:nowrap">Do:</label>
+        <input type="date" id="pt" oninput="updateAllSections()" style="width:auto">
+        <button class="btn btn-outline" onclick="document.getElementById('pf').value='';document.getElementById('pt').value='';updateAllSections()" style="font-size:12.5px;padding:6px 12px">Wyczyść</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--text3);margin-top:5px">Bez dat — dane obejmują wszystkie wgrane wizyty.</p>
+    </div>
+
+    <!-- PODSUMOWANIE -->
+    <div class="view" id="view-podsumowanie">
+      <p class="page-title">Podsumowanie</p>
+      <div id="sec-podsumowanie"><div class="empty">Wgraj pliki w zakładce "Wgraj pliki".</div></div>
+    </div>
+
+    <!-- PRACOWNICY -->
+    <div class="view" id="view-pracownicy">
+      <p class="page-title">Pracownicy</p>
+      <div id="sec-pracownicy"><div class="empty">Wgraj pliki w zakładce "Wgraj pliki".</div></div>
+    </div>
+
+    <!-- USŁUGI -->
+    <div class="view" id="view-uslugi">
+      <p class="page-title">Usługi</p>
+      <div id="sec-uslugi"><div class="empty">Wgraj pliki w zakładce "Wgraj pliki".</div></div>
+    </div>
+
+    <!-- KLIENCI -->
+    <div class="view" id="view-klienci">
+      <p class="page-title">Klienci</p>
+      <div id="sec-klienci"><div class="empty">Wgraj pliki w zakładce "Wgraj pliki".</div></div>
+    </div>
+
+    <!-- DRIVE -->
+    <div class="view" id="view-drive">
+      <p class="page-title">Google Drive</p>
+      <div class="card">
+        <p class="clabel">Połączenie z Google Drive</p>
+        <p style="font-size:13.5px;color:var(--text2);margin-bottom:14px;line-height:1.6">Połącz z Google Drive aby agent automatycznie pobierał pliki z folderu <strong>PERSONALNI Raporty</strong>. Wybierz tygodnie które chcesz analizować.</p>
+        <div id="drive-auth-section">
+          <button class="btn btn-green" onclick="driveSignIn()" id="btn-signin">Zaloguj się przez Google</button>
+          <p style="font-size:11.5px;color:var(--text3);margin-top:8px">Agent poprosi o dostęp do plików na Twoim Google Drive.</p>
+        </div>
+        <div id="drive-connected" style="display:none">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:10px;height:10px;border-radius:50%;background:var(--green)"></div>
+            <span style="font-size:13.5px;color:var(--green);font-weight:600">Połączono z Google Drive</span>
+            <button class="btn btn-outline" onclick="driveSignOut()" style="font-size:12px;padding:4px 10px;margin-left:auto">Rozłącz</button>
+          </div>
+          <div id="drive-status" style="font-size:13px;color:var(--text3);margin-bottom:12px"></div>
+          <button class="btn btn-green" onclick="loadDriveFolders()" id="btn-refresh-drive" style="margin-bottom:1rem">Odśwież listę tygodni</button>
+          <div id="drive-weeks-list"></div>
+          <div id="drive-load-section" style="display:none;margin-top:1rem">
+            <button class="btn btn-green btn-full" onclick="loadSelectedWeeks()">Wczytaj zaznaczone tygodnie ↗</button>
+          </div>
+        </div>
+      </div>
+      <div id="drive-loaded-summary" style="display:none" class="card">
+        <p class="clabel">Wczytane dane z Drive</p>
+        <div id="drive-loaded-list"></div>
+      </div>
+    </div>
+
+    <!-- RAPORT -->
+    <div class="view" id="view-raport">
+      <p class="page-title">Raport AI</p>
+      <div class="card">
+        <p class="clabel">Typ raportu</p>
+        <div class="rtgrid">
+          <div class="rtcard active" id="rt-firma" onclick="setRT('firma')">
+            <div class="ricon">🏢</div><div class="rtitle">Cała firma</div><div class="rsub">Wyniki ogólne studia</div>
+          </div>
+          <div class="rtcard" id="rt-pracownik" onclick="setRT('pracownik')">
+            <div class="ricon">👤</div><div class="rtitle">Pracownik</div><div class="rsub">Raport per trener</div>
+          </div>
+          <div class="rtcard" id="rt-usluga" onclick="setRT('usluga')">
+            <div class="ricon">🎯</div><div class="rtitle">Usługa</div><div class="rsub">Analiza per usługa</div>
+          </div>
+        </div>
+
+        <div id="sel-pracownik" style="display:none;margin-bottom:1rem">
+          <p class="clabel">Wybierz trenera</p>
+          <select id="sel-prac-val"><option value="">— wszyscy trenerzy —</option></select>
+          <p style="font-size:11.5px;color:var(--text3);margin-top:5px">Zostaw puste, aby wygenerować raport dla wszystkich trenerów osobno.</p>
+        </div>
+
+        <div id="sel-usluga" style="display:none;margin-bottom:1rem">
+          <p class="clabel">Wybierz usługę</p>
+          <select id="sel-usl-val"><option value="">— wszystkie usługi —</option></select>
+          <p style="font-size:11.5px;color:var(--text3);margin-top:5px">Zostaw puste, aby wygenerować raport dla wszystkich usług osobno.</p>
+        </div>
+
+        <p class="clabel">Zakres dat</p>
+        <div class="dr-row">
+          <label>Od:</label><input type="date" id="df">
+          <label>Do:</label><input type="date" id="dt">
+          <button class="btn btn-outline" onclick="document.getElementById('df').value='';document.getElementById('dt').value=''" style="font-size:12.5px;padding:6px 12px">Wyczyść</button>
+        </div>
+        <p style="font-size:11.5px;color:var(--text3);margin-top:5px">Bez dat — raport obejmuje wszystkie wgrane dane.</p>
+      </div>
+
+      <div class="chat-area" id="chat-area">
+        <div class="ma">Cześć! Wgraj pliki z Booksy, wybierz typ raportu i kliknij <strong>Generuj raport</strong>. Możesz też zadawać konkretne pytania o dane.</div>
+      </div>
+      <div class="ci-row">
+        <input type="text" id="ci" placeholder="Np. Który trener miał najlepsze wyniki w marcu?" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn btn-outline" onclick="sendChat()">Wyślij</button>
+      </div>
+      <button class="btn btn-green btn-full" onclick="genReport()">Generuj raport</button>
+    </div>
+
+    <!-- INSTRUKCJA -->
+    <div class="view" id="view-instrukcja">
+      <p class="page-title">Instrukcja</p>
+      <div class="card">
+        <p class="clabel">Jakie pliki wgrywać z Booksy</p>
+        <div class="srow"><span class="sbadge">1</span><span><span class="hl">Lista wizyt</span> — najważniejszy plik. Każda wizyta z datą, klientem, trenerem, usługą, wartością i statusem. Booksy Biz: Statystyki → Wizyty → Pobierz.</span></div>
+        <div class="srow"><span class="sbadge">2</span><span><span class="hl">Lista klientów</span> — dane klientów: liczba wizyt, daty aktywności, wartość, grupy. Booksy Biz: Klienci → Pobierz.</span></div>
+        <div class="srow"><span class="sbadge">3</span><span><span class="hl">Efektywność pracowników</span> — wizyty i % powracających klientów per trener.</span></div>
+        <div class="srow"><span class="sbadge">4</span><span><span class="hl">Czas pracy pracowników</span> — grafik i czas wizyt per trener (do % wypełnienia grafiku).</span></div>
+        <div class="srow"><span class="sbadge">5</span><span><span class="hl">Raport wizyt</span> — zbiorcze podsumowanie obłożenia i dni/godzin z najlepszymi wynikami.</span></div>
+        <p style="font-size:12px;color:var(--text3);margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">Agent rozpoznaje typ pliku automatycznie po zawartości — nazwa pliku nie ma znaczenia.</p>
+      </div>
+      <div class="card">
+        <p class="clabel">Typy raportów</p>
+        <div class="srow"><span class="sbadge">🏢</span><span><span class="hl">Cała firma</span> — kompleksowy raport studia: wizyty, obłożenie, klienci, retencja, LTV, rekomendacje.</span></div>
+        <div class="srow"><span class="sbadge">👤</span><span><span class="hl">Pracownik</span> — wybierz konkretnego trenera lub zostaw puste dla raportu wszystkich. Każdy dostaje osobną sekcję z wynikami i rekomendacjami.</span></div>
+        <div class="srow"><span class="sbadge">🎯</span><span><span class="hl">Usługa</span> — wybierz konkretną usługę lub zostaw puste dla analizy wszystkich usług.</span></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const FC=['#126f43','#2980b9','#8e44ad','#c0392b','#d35400','#16a085'];
+let loadedFiles=[], DB={wizyty:[],klienci:[],pracownicy:[],czasPracy:{},raportWizyt:{}};
+let rtype='firma';
+
+window.addEventListener('DOMContentLoaded',()=>{
+  const k=localStorage.getItem('bk_key');
+  if(k){document.getElementById('api-key').value=k;setKeyOk();}
+  const today=new Date();
+  const from=new Date(); from.setDate(today.getDate()-30);
+  document.getElementById('dt').value=today.toISOString().split('T')[0];
+  document.getElementById('df').value=from.toISOString().split('T')[0];
+  document.getElementById('pt').value=today.toISOString().split('T')[0];
+  document.getElementById('pf').value=from.toISOString().split('T')[0];
+  updateAllSections();
+});
+function saveKey(){
+  const v=document.getElementById('api-key').value.trim();
+  const el=document.getElementById('api-st');
+  if(!v.startsWith('sk-ant-')){el.style.color='#c0392b';el.textContent='Nieprawidłowy klucz.';return;}
+  localStorage.setItem('bk_key',v);setKeyOk();
+  el.style.color='var(--green)';el.textContent='✓ Klucz zapisany.';
+}
+function setKeyOk(){
+  const b=document.getElementById('key-indicator');
+  b.textContent='Klucz API aktywny';
+  b.className='key-badge key-active';
+}
+function getKey(){return localStorage.getItem('bk_key')||'';}
+
+const DATA_VIEWS=['podsumowanie','pracownicy','uslugi','klienci'];
+function sv(v,btn){
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(e=>e.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  if(btn)btn.classList.add('active');
+  const bar=document.getElementById('date-filter-bar');
+  if(bar)bar.style.display=DATA_VIEWS.includes(v)?'block':'none';
+}
+
+function setRT(t){
+  rtype=t;
+  ['firma','pracownik','usluga'].forEach(x=>document.getElementById('rt-'+x).classList.toggle('active',x===t));
+  document.getElementById('sel-pracownik').style.display=t==='pracownik'?'block':'none';
+  document.getElementById('sel-usluga').style.display=t==='usluga'?'block':'none';
+}
+
+function populateSelectors(){
+  const z=zakonczone(DB.wizyty);
+  const pracownicy=[...new Set(z.map(r=>r.pracownik).filter(Boolean))].sort();
+  const selP=document.getElementById('sel-prac-val');
+  const curP=selP.value;
+  selP.innerHTML='<option value="">— wszyscy trenerzy —</option>'+pracownicy.map(p=>`<option value="${p}">${p}</option>`).join('');
+  if(curP&&pracownicy.includes(curP))selP.value=curP;
+  const uslugi=[...new Set(z.map(r=>simplifyService(r.usluga)).filter(Boolean))].sort();
+  const selU=document.getElementById('sel-usl-val');
+  const curU=selU.value;
+  selU.innerHTML='<option value="">— wszystkie usługi —</option>'+uslugi.map(u=>`<option value="${u}">${u}</option>`).join('');
+  if(curU&&uslugi.includes(curU))selU.value=curU;
+}
+
+function onDrop(e){e.preventDefault();document.getElementById('dz').classList.remove('drag');if(e.dataTransfer.files.length)handleFiles(e.dataTransfer.files);}
+
+function handleFiles(files){
+  Array.from(files).forEach(file=>{
+    if(loadedFiles.some(f=>f.name===file.name))return;
+    const isCSV=file.name.toLowerCase().endsWith('.csv');
+    const color=FC[loadedFiles.length%FC.length];
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:isCSV?'string':'array',raw:false});
+        const parsed=parseFile(wb,file.name,color);
+        if(parsed){loadedFiles.push(parsed);mergeDB();renderFileList();populateSelectors();updateAllSections();}
+      }catch(err){console.error(err);}
+    };
+    if(isCSV)reader.readAsText(file,'UTF-8');else reader.readAsArrayBuffer(file);
+  });
+}
+
+function detectFileType(raw){
+  const allCells=raw.slice(0,15).flatMap(r=>r.map(c=>String(c||'')));
+  const has=(...terms)=>terms.every(t=>allCells.some(c=>c.includes(t)));
+  if(has('Data i godzina','Klient','Pracownik','Status'))return'wizyty';
+  if(has('Imię i nazwisko','Pierwsza wizyta','Ostatnia wizyta','Wartość wizyt'))return'klienci';
+  if(has('Pracownik','Czas wg grafiku','Czas wizyt'))return'czas_pracy';
+  if(has('Pracownik','Liczba wizyt','% powracających klientów'))return'efektywnosc';
+  if(has('Zakończone','Niezarezerwowane godziny')||has('Zakończone','Anulowane','Obłożenie'))return'raport_wizyt';
+  return'unknown';
+}
+
+function parseFile(wb,name,color){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  const type=detectFileType(raw);
+  return{name,color,type,raw};
+}
+
+function parseTime(s){
+  if(!s)return 0;
+  const m=String(s).match(/(\d+)h:(\d+)min/);
+  return m?parseInt(m[1])*60+parseInt(m[2]):0;
+}
+
+function mergeDB(){
+  DB={wizyty:[],klienci:[],pracownicy:[],czasPracy:{},raportWizyt:{}};
+  loadedFiles.forEach(f=>{
+    if(f.type==='wizyty')parseWizyty(f.raw);
+    else if(f.type==='klienci')parseKlienci(f.raw);
+    else if(f.type==='efektywnosc')parseEfektywnosc(f.raw);
+    else if(f.type==='czas_pracy')parseCzasPracy(f.raw);
+    else if(f.type==='raport_wizyt')parseRaportWizyt(f.raw);
+  });
+}
+
+function findHeaderRow(raw,markers){
+  for(let i=0;i<raw.length;i++){
+    const row=raw[i].map(c=>String(c||''));
+    if(markers.every(m=>row.some(c=>c.includes(m))))return i;
+  }
+  return -1;
+}
+
+function parseWizyty(raw){
+  const hi=findHeaderRow(raw,['Status','Klient']);
+  if(hi<0)return;
+  const hdr=raw[hi].map(c=>String(c||'').trim());
+  const ci={dt:hdr.indexOf('Data i godzina'),usluga:hdr.indexOf('Usługa'),klient:hdr.indexOf('Klient'),pracownik:hdr.indexOf('Pracownik'),wartosc:hdr.findIndex(h=>h.includes('Wartość usług')),status:hdr.indexOf('Status')};
+  for(let i=hi+1;i<raw.length;i++){
+    const r=raw[i];
+    if(!r||!r[ci.status])continue;
+    const st=String(r[ci.status]).trim();
+    if(!['Zakończone','Nieobecność'].includes(st))continue;
+    const dt_raw=String(r[ci.dt]||'').trim();
+    let dt=null;
+    const m=dt_raw.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+    if(m)dt=new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]);
+    if(dt&&dt>new Date())continue;
+    DB.wizyty.push({dt,dt_raw,usluga:String(r[ci.usluga]||'').trim(),klient:String(r[ci.klient]||'').trim(),pracownik:String(r[ci.pracownik]||'').trim(),wartosc:parseFloat(r[ci.wartosc])||0,status:st});
+  }
+}
+
+function parseKlienci(raw){
+  const hi=findHeaderRow(raw,['Imię i nazwisko','Grupy']);
+  if(hi<0)return;
+  const hdr=raw[hi].map(c=>String(c||'').trim());
+  const ci={name:hdr.indexOf('Imię i nazwisko'),grupy:hdr.indexOf('Grupy'),rez:hdr.indexOf('Liczba rezerwacji'),nob:hdr.indexOf('Liczba nieobecności'),p:hdr.indexOf('Pierwsza wizyta'),o:hdr.indexOf('Ostatnia wizyta'),wartosc:hdr.indexOf('Wartość wizyt')};
+  for(let i=hi+1;i<raw.length;i++){
+    const r=raw[i];
+    if(!r||!r[ci.name])continue;
+    const name=String(r[ci.name]||'').trim();
+    if(!name)continue;
+    const rez=parseInt(r[ci.rez])||0;
+    const grupy=String(r[ci.grupy]||'').trim();
+    const p_raw=String(r[ci.p]||'').trim();
+    const o_raw=String(r[ci.o]||'').trim();
+    const wartosc=parseFloat(r[ci.wartosc])||0;
+    let p_dt=null,o_dt=null;
+    const pm=p_raw.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    const om=o_raw.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    if(pm)p_dt=new Date(+pm[3],+pm[2]-1,+pm[1]);
+    if(om)o_dt=new Date(+om[3],+om[2]-1,+om[1]);
+    const effectiveEnd=o_dt&&o_dt>new Date()?new Date():o_dt;
+    const days=p_dt&&effectiveEnd?Math.round((effectiveEnd-p_dt)/(1000*60*60*24)):null;
+    DB.klienci.push({name,grupy,rez,nob:parseInt(r[ci.nob])||0,p_dt,o_dt,days,wartosc});
+  }
+}
+
+function parseEfektywnosc(raw){
+  const hi=findHeaderRow(raw,['Pracownik','Liczba wizyt']);
+  if(hi<0)return;
+  const hdr=raw[hi].map(c=>String(c||'').trim());
+  for(let i=hi+1;i<raw.length;i++){
+    const r=raw[i];
+    if(!r)continue;
+    const ni=hdr.findIndex(h=>h==='Pracownik');
+    const name=String(r[ni]||'').trim();
+    if(!name)continue;
+    if(!DB.pracownicy.find(p=>p.name===name)){
+      DB.pracownicy.push({name,wizyty:parseInt(r[hdr.indexOf('Liczba wizyt')])||0,powracajacy:parseFloat(r[hdr.indexOf('% powracających klientów')])||0});
+    }
+  }
+}
+
+function parseCzasPracy(raw){
+  const hi=findHeaderRow(raw,['Pracownik','Czas wg grafiku']);
+  if(hi<0)return;
+  const hdr=raw[hi].map(c=>String(c||'').trim());
+  for(let i=hi+1;i<raw.length;i++){
+    const r=raw[i];
+    if(!r)continue;
+    const ni=hdr.findIndex(h=>h==='Pracownik');
+    const name=String(r[ni]||'').trim();
+    if(!name)continue;
+    const grafik=parseTime(r[hdr.indexOf('Czas wg grafiku')]);
+    const wizyt=parseTime(r[hdr.indexOf('Czas wizyt')]);
+    DB.czasPracy[name]={grafik,wizyt,pct:grafik>0?Math.round(wizyt/grafik*100):0};
+  }
+}
+
+function parseRaportWizyt(raw){
+  DB.raportWizyt={loaded:true};
+  for(const r of raw){
+    if(!r||!r[1])continue;
+    const label=String(r[1]||'').trim();
+    if(label==='Zakończone'){DB.raportWizyt.zakonczone=parseInt(r[2])||0;DB.raportWizyt.wartoscZak=parseFloat(r[5])||0;}
+
+    if(label==='Nieobecności')DB.raportWizyt.nieobecnosci=parseInt(r[2])||0;
+    if(label==='Zarezerwowane godziny')DB.raportWizyt.zarezerwowane=String(r[2]||'');
+    if(label==='Przepracowany czas')DB.raportWizyt.przepracowany=String(r[2]||'');
+    if(label==='Niezarezerwowane godziny')DB.raportWizyt.niezarezerwowane=String(r[2]||'');
+  }
+}
+
+function getFiltered(){
+  const df=document.getElementById('df')?.value;
+  const dt=document.getElementById('dt')?.value;
+  if(!df&&!dt)return DB.wizyty;
+  return DB.wizyty.filter(r=>{
+    if(!r.dt)return true;
+    const d=r.dt.toISOString().split('T')[0];
+    if(df&&d<df)return false;
+    if(dt&&d>dt)return false;
+    return true;
+  });
+}
+
+function zakonczone(data){return data.filter(r=>r.status==='Zakończone');}
+
+function simplifyService(s){
+  if(s.includes('parze'))return'Trening w parze';
+  if(s.toLowerCase().includes('konsultacja dietet'))return'Konsultacja dietetyczna';
+  if(s.toLowerCase().includes('konsultacja'))return'Konsultacja przedtreningowa';
+  if(s.toLowerCase().includes('funkcjonalny'))return'Trening funkcjonalny';
+  if(s.toLowerCase().includes('trening'))return'Trening indywidualny';
+  return s.split('(')[0].trim()||s;
+}
+
+function renderFileList(){
+  const el=document.getElementById('file-list');
+  el.innerHTML=loadedFiles.map((f,i)=>`
+    <div class="frow">
+      <span class="fdot" style="background:${f.color}"></span>
+      <span class="fname">${f.name}</span>
+      <span class="ftype">${f.type==='unknown'?'nierozpoznany':f.type.replace('_',' ')}</span>
+      <button class="fdel" onclick="removeFile(${i})">×</button>
+    </div>`).join('');
+  document.getElementById('sbar').style.display=loadedFiles.length?'flex':'none';
+  document.getElementById('sb-pliki').textContent=loadedFiles.length;
+  const z=zakonczone(DB.wizyty);
+  document.getElementById('sb-wizyty').textContent=z.length||'—';
+  document.getElementById('sb-klienci').textContent=DB.klienci.filter(c=>c.rez>0).length||'—';
+}
+function removeFile(i){loadedFiles.splice(i,1);mergeDB();renderFileList();populateSelectors();updateAllSections();}
+function clearAll(){loadedFiles=[];mergeDB();renderFileList();populateSelectors();updateAllSections();}
+
+function getPreviewFiltered(){
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  if(!pf&&!pt)return DB.wizyty;
+  return DB.wizyty.filter(r=>{
+    if(!r.dt)return true;
+    const d=r.dt.toISOString().split('T')[0];
+    if(pf&&d<pf)return false;
+    if(pt&&d>pt)return false;
+    return true;
+  });
+}
+
+function getPreviewFiltered(){
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  if(!pf&&!pt)return DB.wizyty;
+  return DB.wizyty.filter(r=>{
+    if(!r.dt)return true;
+    const d=r.dt.toISOString().split('T')[0];
+    if(pf&&d<pf)return false;
+    if(pt&&d>pt)return false;
+    return true;
+  });
+}
+
+function getCommonData(){
+  const z=zakonczone(getPreviewFiltered());
+  const pf=document.getElementById('pf')?.value||'';
+  const pt=document.getElementById('pt')?.value||'';
+  const today=new Date();
+  const cutoff=new Date(today); cutoff.setDate(today.getDate()-14);
+
+  const pracMap={};
+  z.forEach(r=>{if(!r.pracownik)return;if(!pracMap[r.pracownik])pracMap[r.pracownik]={wizyty:0,wartosc:0,klienci:new Set(),noshows:0};pracMap[r.pracownik].wizyty++;pracMap[r.pracownik].wartosc+=r.wartosc;pracMap[r.pracownik].klienci.add(r.klient);});
+  getPreviewFiltered().filter(r=>r.status==='Nieobecność').forEach(r=>{if(r.pracownik&&pracMap[r.pracownik])pracMap[r.pracownik].noshows++;});
+
+  const usMap={};
+  z.forEach(r=>{const u=simplifyService(r.usluga);if(!usMap[u])usMap[u]={wizyty:0,wartosc:0};usMap[u].wizyty++;usMap[u].wartosc+=r.wartosc;});
+
+  const dni=['Pn','Wt','Śr','Cz','Pt','Sb','Nd'];
+  const dniC=[0,0,0,0,0,0,0];
+  z.forEach(r=>{if(r.dt)dniC[r.dt.getDay()===0?6:r.dt.getDay()-1]++;});
+  const hC={};
+  z.forEach(r=>{if(r.dt){const h=r.dt.getHours();hC[h]=(hC[h]||0)+1;}});
+
+  const aktywni=DB.klienci.filter(c=>c.rez>0);
+  const nowi=DB.klienci.filter(c=>{if(!c.p_dt||c.rez===0)return false;const d=c.p_dt.toISOString().split('T')[0];if(pf&&d<pf)return false;if(pt&&d>pt)return false;return true;});
+  const aktywniKlienci=DB.klienci.filter(c=>c.o_dt&&c.o_dt>=cutoff&&c.rez>0);
+  const nieaktywni=DB.klienci.filter(c=>c.grupy.includes('Nieaktywni')&&c.rez>0);
+  const dniList=aktywni.filter(c=>c.days!=null&&c.days>0).map(c=>c.days);
+  const avgDni=dniList.length?Math.round(dniList.reduce((a,b)=>a+b,0)/dniList.length):0;
+  const ltvList=aktywni.filter(c=>c.wartosc>0).map(c=>c.wartosc);
+  const avgLTV=ltvList.length?Math.round(ltvList.reduce((a,b)=>a+b,0)/ltvList.length):0;
+  const avgWizytyKlient=aktywni.length?Math.round(aktywni.reduce((s,c)=>s+c.rez,0)/aktywni.length):0;
+  const pf2=document.getElementById('pf')?.value;
+  const pt2=document.getElementById('pt')?.value;
+  function countWorkdays(from,to){
+    let count=0;
+    const d=new Date(from);
+    d.setHours(0,0,0,0);
+    const end=new Date(to);
+    end.setHours(23,59,59,999);
+    while(d<=end){const wd=d.getDay();if(wd>=1&&wd<=5)count++;d.setDate(d.getDate()+1);}
+    return count;
+  }
+  const rangeFrom=pf2?new Date(pf2):(() => {const d=new Date(); d.setMonth(d.getMonth()-1); return d;})();
+  const rangeTo=pt2?new Date(pt2):new Date();
+  const workdays=countWorkdays(rangeFrom,rangeTo);
+  const maxSlots=workdays*15*4;
+  const grafPct=maxSlots>0?Math.round(z.length/maxSlots*100):null;
+  const grafSum=0; const wizSum=0; // obłożenie liczone dynamicznie na podstawie dni roboczych
+  const noshows=getPreviewFiltered().filter(r=>r.status==='Nieobecność').length;
+  const val=z.reduce((s,r)=>s+r.wartosc,0);
+
+  return{z,pracMap,usMap,dni,dniC,hC,aktywni,nowi,aktywniKlienci,nieaktywni,avgDni,avgLTV,avgWizytyKlient,grafPct,noshows,val,total:z.length,maxSlots,workdays};
+}
+
+function barRow(label,pct,color,valText){
+  return`<div class="brow"><span class="blbl" title="${label}">${label}</span><div class="btrack"><div class="bfill" style="width:${pct}%;background:${color}"></div></div><span class="bval">${valText}</span></div>`;
+}
+
+function renderPodsumowanie(d){
+  const avgVal=d.total?Math.round(d.val/d.total):0;
+  const el=document.getElementById('sec-podsumowanie');
+  el.innerHTML=`
+  <div class="mgrid4">
+    <div class="mc"><div class="mlbl">Wizyty zakończone</div><div class="mval">${d.total}</div><div class="msub neutral">w wybranym okresie</div></div>
+    <div class="mc"><div class="mlbl">Wartość zrealizowanych usług</div><div class="mval">${d.val.toLocaleString('pl')} zł</div><div class="msub neutral">śr. ${avgVal} zł / wizytę</div></div>
+    <div class="mc"><div class="mlbl">No-show</div><div class="mval">${d.noshows}</div><div class="msub ${d.noshows===0?'good':d.noshows<=3?'neutral':'bad'}">${d.noshows===0?'brak nieobecności':'nieobecności'}</div></div>
+    <div class="mc"><div class="mlbl">Obłożenie studia</div><div class="mval">${d.grafPct!=null?d.grafPct+'%':'—'}</div><div class="msub ${d.grafPct!=null?(d.grafPct>=70?'good':d.grafPct>=50?'neutral':'bad'):'neutral'}">${d.grafPct!=null?(d.grafPct>=70?'dobre':d.grafPct>=50?'średnie':'niskie')+' ('+d.maxSlots+' slotów)':'dni robocze × 15h × 4 miejsca'}</div></div>
+  </div>
+  <div class="mgrid4">
+    <div class="mc"><div class="mlbl">Nowi klienci</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
+    <div class="mc"><div class="mlbl">Aktywni klienci</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 14 dni temu</div></div>
+    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">${d.nieaktywni.filter(c=>c.rez>=10).length} do odzyskania</div></div>
+    <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
+  </div>
+  <div class="card">
+    <p class="clabel">Obłożenie — dni tygodnia</p>
+    <div class="hgrid">${d.dni.map((dn,i)=>{const p=Math.round(d.dniC[i]/Math.max(...d.dniC,1)*100);return`<div class="hcell"><div class="hnum">${d.dniC[i]}</div><div style="margin:4px 0;height:36px;background:var(--bg);border:1px solid var(--border);border-radius:3px;overflow:hidden;display:flex;align-items:flex-end"><div style="width:100%;height:${p}%;background:var(--green);border-radius:2px"></div></div><div class="hlbl">${dn}</div></div>`;}).join('')}</div>
+  </div>
+  <div class="card">
+    <p class="clabel">Obłożenie — godziny dnia</p>
+    <div style="display:flex;gap:3px;align-items:flex-end;height:72px">${Object.keys(d.hC).map(Number).sort((a,b)=>a-b).map(h=>{const c=d.hC[h];const p=Math.round(c/Math.max(...Object.values(d.hC),1)*100);return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px"><div style="font-size:10px;color:var(--text3)">${c}</div><div style="width:100%;height:${Math.max(p*0.58,3)}px;background:var(--green);border-radius:2px 2px 0 0;opacity:.85"></div><div style="font-size:9px;color:var(--text3)">${h}</div></div>`;}).join('')}</div>
+  </div>`;
+}
+
+function renderPracownicy(d){
+  const list=Object.entries(d.pracMap).sort((a,b)=>b[1].wizyty-a[1].wizyty);
+  const maxW=list[0]?.[1].wizyty||1;
+  const el=document.getElementById('sec-pracownicy');
+  if(!list.length){el.innerHTML='<div class="empty">Brak danych pracowników. Wgraj plik lista_wizyt.</div>';return;}
+  el.innerHTML=list.map(([n,pd])=>{
+    const cp=DB.czasPracy[n];
+    const ep=DB.pracownicy.find(p=>p.name===n);
+    const pct=Math.round(pd.wizyty/maxW*100);
+    const avgV=pd.wizyty?Math.round(pd.wartosc/pd.wizyty):0;
+    return`<div class="card">
+      <p class="clabel">${n}${ep?` <span style="font-weight:400;color:var(--text3)">· ${Math.round(ep.powracajacy*100)}% powracających</span>`:''}</p>
+      <div class="mgrid4" style="margin-bottom:.75rem">
+        <div class="mc"><div class="mlbl">Wizyty</div><div class="mval">${pd.wizyty}</div></div>
+        <div class="mc"><div class="mlbl">Wartość usług</div><div class="mval">${pd.wartosc.toLocaleString('pl')} zł</div></div>
+        <div class="mc"><div class="mlbl">Śr. / wizytę</div><div class="mval">${avgV} zł</div></div>
+        <div class="mc"><div class="mlbl">Wypełnienie grafiku</div><div class="mval">${cp?cp.pct+'%':'—'}</div><div class="msub ${cp?(cp.pct>=70?'good':cp.pct>=50?'neutral':'bad'):'neutral'}">${cp?(cp.pct>=70?'dobre':cp.pct>=50?'średnie':'niskie'):'brak danych'}</div></div>
+      </div>
+      <div class="brow"><span class="blbl">udział w wizytach</span><div class="btrack"><div class="bfill" style="width:${pct}%;background:var(--green)"></div></div><span class="bval">${pd.wizyty} / ${d.total}</span></div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">Klientów obsłużonych: ${pd.klienci.size} · No-show: ${pd.noshows||0}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderUslugi(d){
+  const list=Object.entries(d.usMap).sort((a,b)=>b[1].wizyty-a[1].wizyty);
+  const maxW=list[0]?.[1].wizyty||1;
+  const el=document.getElementById('sec-uslugi');
+  if(!list.length){el.innerHTML='<div class="empty">Brak danych usług. Wgraj plik lista_wizyt.</div>';return;}
+  el.innerHTML=`<div class="card"><p class="clabel">Popularność usług</p>`+
+    list.map(([u,ud])=>{
+      const pct=Math.round(ud.wizyty/maxW*100);
+      const avgV=ud.wizyty?Math.round(ud.wartosc/ud.wizyty):0;
+      return barRow(u,pct,'#2980b9',`${ud.wizyty} wizyt · śr. ${avgV} zł`);
+    }).join('')+`</div>`+
+    `<div class="card"><p class="clabel">Wartość usług</p>`+
+    list.map(([u,ud])=>{
+      const maxV=list.reduce((m,[,x])=>Math.max(m,x.wartosc),0)||1;
+      const pct=Math.round(ud.wartosc/maxV*100);
+      return barRow(u,pct,'#8e44ad',`${ud.wartosc.toLocaleString('pl')} zł`);
+    }).join('')+`</div>`;
+}
+
+function renderKlienci(d){
+  const el=document.getElementById('sec-klienci');
+  const aktywni=d.aktywni;
+  const sorted=aktywni.filter(c=>c.wartosc>0).sort((a,b)=>b.wartosc-a.wartosc);
+  const maxV=sorted[0]?.wartosc||1;
+  const doOdzysk=d.nieaktywni.filter(c=>c.rez>=10).sort((a,b)=>b.rez-a.rez);
+  el.innerHTML=`
+  <div class="mgrid4">
+    <div class="mc"><div class="mlbl">Wszyscy klienci</div><div class="mval">${aktywni.length}</div><div class="msub neutral">z co najmniej 1 wizytą</div></div>
+    <div class="mc"><div class="mlbl">Nowi klienci</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
+    <div class="mc"><div class="mlbl">Aktywni</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 14 dni temu</div></div>
+    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">${doOdzysk.length} do odzyskania</div></div>
+  </div>
+  <div class="mgrid2">
+    <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
+    <div class="mc"><div class="mlbl">Śr. LTV klienta</div><div class="mval">${d.avgLTV.toLocaleString('pl')} zł</div><div class="msub neutral">śr. ${d.avgWizytyKlient} wizyt / klient</div></div>
+  </div>
+  <div class="card">
+    <p class="clabel">Top 15 klientów wg wartości</p>
+    ${sorted.slice(0,15).map(c=>{const p=Math.round(c.wartosc/maxV*100);return barRow(c.name,p,'#8e44ad',`${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak danych.</div>'}
+  </div>
+  <div class="card">
+    <p class="clabel">Klienci do odzyskania (nieaktywni, ≥ 10 wizyt)</p>
+    ${doOdzysk.slice(0,15).map(c=>{const maxR=doOdzysk[0]?.rez||1;const p=Math.round(c.rez/maxR*100);return barRow(c.name,p,'#c0392b',`${c.rez} wizyt · ${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak klientów do odzyskania.</div>'}
+  </div>`;
+}
+
+function updateAllSections(){
+  const hasData=DB.wizyty.length||DB.klienci.length;
+  const bar=document.getElementById('date-filter-bar');
+  if(bar)bar.style.display=hasData?'block':'none';
+  if(!hasData)return;
+  const d=getCommonData();
+  renderPodsumowanie(d);
+  renderPracownicy(d);
+  renderUslugi(d);
+  renderKlienci(d);
+}
+
+function buildContext(){
+  const data=getFiltered();
+  const z=zakonczone(data);
+  const df=document.getElementById('df')?.value;
+  const dt=document.getElementById('dt')?.value;
+  const dateInfo=(df||dt)?`Zakres dat: ${df||'—'} → ${dt||'—'}`:'Zakres: wszystkie wgrane dane';
+  const selPrac=document.getElementById('sel-prac-val')?.value||'';
+  const selUsl=document.getElementById('sel-usl-val')?.value||'';
+
+  const total=z.length;
+  const val=z.reduce((s,r)=>s+r.wartosc,0);
+  const avgVal=total?Math.round(val/total):0;
+  const noshows=data.filter(r=>r.status==='Nieobecność').length;
+  const aktywni=DB.klienci.filter(c=>c.rez>0);
+  const nowi=DB.klienci.filter(c=>{
+    if(!c.p_dt||c.rez===0)return false;
+    const d=c.p_dt.toISOString().split('T')[0];
+    if(df&&d<df)return false;
+    if(dt&&d>dt)return false;
+    return true;
+  }).length;
+  const nieakt=DB.klienci.filter(c=>c.grupy.includes('Nieaktywni')&&c.rez>=10).length;
+  const dniList=aktywni.filter(c=>c.days!=null&&c.days>0).map(c=>c.days);
+  const avgDni=dniList.length?Math.round(dniList.reduce((a,b)=>a+b,0)/dniList.length):0;
+  const ltvList=aktywni.filter(c=>c.wartosc>0).map(c=>c.wartosc);
+  const avgLTV=ltvList.length?Math.round(ltvList.reduce((a,b)=>a+b,0)/ltvList.length):0;
+  const avgWiz=aktywni.length?Math.round(aktywni.reduce((s,c)=>s+c.rez,0)/aktywni.length):0;
+
+  const pracData=selPrac?z.filter(r=>r.pracownik===selPrac):z;
+  const pracMap={};
+  pracData.forEach(r=>{if(!r.pracownik)return;if(!pracMap[r.pracownik])pracMap[r.pracownik]={wizyty:0,wartosc:0,klienci:new Set()};pracMap[r.pracownik].wizyty++;pracMap[r.pracownik].wartosc+=r.wartosc;pracMap[r.pracownik].klienci.add(r.klient);});
+  const pracLines=Object.entries(pracMap).sort((a,b)=>b[1].wizyty-a[1].wizyty).map(([n,d])=>{
+    const cp=DB.czasPracy[n];const ep=DB.pracownicy.find(p=>p.name===n);
+    return`${n}: ${d.wizyty} wizyt, wartość ${d.wartosc.toLocaleString('pl')} zł, śr. ${d.wizyty?Math.round(d.wartosc/d.wizyty):0} zł/wizytę, klientów: ${d.klienci.size}${cp?`, wypełnienie grafiku: ${cp.pct}%`:''}${ep?`, % powracających: ${Math.round(ep.powracajacy*100)}%`:''}`;
+  }).join('\n');
+
+  const usData=selUsl?z.filter(r=>simplifyService(r.usluga)===selUsl):z;
+  const usMap={};
+  usData.forEach(r=>{const u=simplifyService(r.usluga);if(!usMap[u])usMap[u]={wizyty:0,wartosc:0};usMap[u].wizyty++;usMap[u].wartosc+=r.wartosc;});
+  const usLines=Object.entries(usMap).sort((a,b)=>b[1].wizyty-a[1].wizyty).map(([u,d])=>`${u}: ${d.wizyty} wizyt, wartość ${d.wartosc.toLocaleString('pl')} zł`).join('\n');
+
+  const dni=['Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota','Niedziela'];
+  const dniC=[0,0,0,0,0,0,0];
+  z.forEach(r=>{if(r.dt)dniC[r.dt.getDay()===0?6:r.dt.getDay()-1]++;});
+  const dniLines=dni.map((d,i)=>`${d}: ${dniC[i]} wizyt`).join(', ');
+  const hC={};
+  z.forEach(r=>{if(r.dt){const h=r.dt.getHours();hC[h]=(hC[h]||0)+1;}});
+  const hLines=Object.entries(hC).sort((a,b)=>+a[0]-+b[0]).map(([h,c])=>`${h}:00 — ${c}`).join(', ');
+
+  const pf2=document.getElementById('pf')?.value;
+  const pt2=document.getElementById('pt')?.value;
+  function countWorkdays(from,to){
+    let count=0;
+    const d=new Date(from);
+    d.setHours(0,0,0,0);
+    const end=new Date(to);
+    end.setHours(23,59,59,999);
+    while(d<=end){const wd=d.getDay();if(wd>=1&&wd<=5)count++;d.setDate(d.getDate()+1);}
+    return count;
+  }
+  const rangeFrom=pf2?new Date(pf2):(() => {const d=new Date(); d.setMonth(d.getMonth()-1); return d;})();
+  const rangeTo=pt2?new Date(pt2):new Date();
+  const workdays=countWorkdays(rangeFrom,rangeTo);
+  const maxSlots=workdays*15*4;
+  const grafPct=maxSlots>0?Math.round(z.length/maxSlots*100):null;
+  const grafSum=0; const wizSum=0; // obłożenie liczone dynamicznie na podstawie dni roboczych
+  const bcFrom=df?new Date(df):(() => {const d=new Date(); d.setMonth(d.getMonth()-1); return d;})();
+  const bcTo=dt?new Date(dt):new Date();
+  function countWD(from,to){let c=0;const cur=new Date(from);cur.setHours(0,0,0,0);const end=new Date(to);end.setHours(23,59,59,999);while(cur<=end){const w=cur.getDay();if(w>=1&&w<=5)c++;cur.setDate(cur.getDate()+1);}return c;}
+  const bcWorkdays=countWD(bcFrom,bcTo);
+  const bcMaxSlots=bcWorkdays*15*4;
+  const grafPctBC=bcMaxSlots>0?Math.round(z.length/bcMaxSlots*100):null;
+  const grafLines=`Obłożenie studia: ${grafPctBC!=null?grafPctBC+'%':'brak danych'} (${z.length} wizyt / ${bcMaxSlots} dostępnych slotów, ${bcWorkdays} dni roboczych × 15h × 4 stanowiska)`;
+  const topKlienci=aktywni.filter(c=>c.wartosc>0).sort((a,b)=>b.wartosc-a.wartosc).slice(0,5).map(c=>`${c.name}: ${c.wartosc.toLocaleString('pl')} zł (${c.rez} wizyt, aktywny ${c.days?Math.round(c.days/30)+' mies.':'—'})`).join('\n');
+
+  let typeLabel='';
+  if(rtype==='firma')typeLabel='raport całej firmy';
+  else if(rtype==='pracownik')typeLabel=selPrac?`raport trenera: ${selPrac}`:'raport każdego pracownika osobno';
+  else if(rtype==='usluga')typeLabel=selUsl?`raport usługi: ${selUsl}`:'raport każdej usługi osobno';
+
+  return`Jesteś agentem raportowym dla PERSONALNI Studio Treningu w Krakowie. Odpowiadaj WYŁĄCZNIE po polsku, konkretnie i analitycznie. W danych znajdują się wyłącznie wizyty zakończone i nieobecności — anulowane nie istnieją w bazie.
+
+Typ raportu: ${typeLabel}
+${dateInfo}
+
+=== WIZYTY (zakończone) ===
+Łącznie zakończonych: ${total} | Wartość zrealizowanych usług: ${val.toLocaleString('pl')} zł | Śr. ${avgVal} zł/wizytę | No-show: ${noshows}
+
+=== PRACOWNICY ===
+${pracLines||'Brak danych.'}
+Obłożenie studia: ${grafPctBC!=null?grafPctBC+'%':'brak danych'} (${bcWorkdays} dni roboczych, max ${bcMaxSlots} slotów)
+${grafLines||''}
+
+=== USŁUGI ===
+${usLines||'Brak danych.'}
+
+=== OBŁOŻENIE ===
+Dni: ${dniLines}
+Godziny: ${hLines||'brak danych'}
+
+=== KLIENCI ===
+Aktywnych: ${aktywni.length} | Nowi: ${nowi} | Aktywni (wizyta ≤14 dni): ${(()=>{const t=new Date();const c=new Date(t);c.setDate(t.getDate()-14);return DB.klienci.filter(k=>k.o_dt&&k.o_dt>=c&&k.rez>0).length;})()}
+Nieaktywni: ${DB.klienci.filter(c=>c.grupy.includes('Nieaktywni')&&c.rez>0).length} | Do odzyskania (≥10 wizyt): ${nieakt}
+Śr. czas aktywności: ${Math.round(avgDni/30)} mies. | Śr. wizyt/klient: ${avgWiz} | Śr. LTV: ${avgLTV.toLocaleString('pl')} zł
+Top 5 klientów: ${topKlienci||'brak danych'}
+
+=== INSTRUKCJA ===
+Grupuj w sekcje: 1.Wyniki ogólne 2.Pracownicy 3.Usługi 4.Klienci (retencja, LTV, do odzyskania) 5.Obłożenie (szczyty i luki) 6.Rekomendacje
+Jeśli typ = "raport każdego pracownika osobno": osobna sekcja dla KAŻDEGO trenera z nagłówkiem.
+Jeśli typ zawiera "raport trenera:": szczegółowy raport TYLKO dla tego trenera.
+Jeśli typ = "raport każdej usługi osobno": osobna sekcja dla KAŻDEJ usługi.
+Jeśli typ zawiera "raport usługi:": szczegółowy raport TYLKO dla tej usługi.`;
+}
+
+async function callAPI(msg,div){
+  const key=getKey();
+  if(!key){div.innerHTML='⚠️ Brak klucza API — wpisz go w zakładce <strong>Ustawienia</strong>.';return;}
+  if(!DB.wizyty.length&&!DB.klienci.length){div.innerHTML='⚠️ Brak danych — wgraj pliki w zakładce <strong>Wgraj pliki</strong>.';return;}
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,system:buildContext(),messages:[{role:'user',content:msg}]})
+    });
+    const data=await res.json();
+    if(data.error){div.innerHTML='⚠️ Błąd API: '+data.error.message;return;}
+    div.innerHTML=(data.content?.map(b=>b.text||'').join('')||'Brak odpowiedzi.').replace(/\n/g,'<br>');
+  }catch(e){div.innerHTML='⚠️ Błąd połączenia: '+e.message;}
+}
+
+async function genReport(){
+  const area=document.getElementById('chat-area');
+  const df=document.getElementById('df')?.value;
+  const dt=document.getElementById('dt')?.value;
+  const dateLabel=(df||dt)?` · ${df||'—'} → ${dt||'—'}`:'';
+  const selPrac=document.getElementById('sel-prac-val')?.value||'';
+  const selUsl=document.getElementById('sel-usl-val')?.value||'';
+  let tl='';
+  if(rtype==='firma')tl='Cała firma';
+  else if(rtype==='pracownik')tl=selPrac?`Trener: ${selPrac}`:'Wszyscy trenerzy';
+  else if(rtype==='usluga')tl=selUsl?`Usługa: ${selUsl}`:'Wszystkie usługi';
+  const z=zakonczone(getFiltered());
+  area.innerHTML+=`<div class="mu">Raport: ${tl}${dateLabel} — ${z.length} wizyt</div>`;
+  const div=document.createElement('div');div.className='ma';
+  div.innerHTML='<span class="spinner"></span>Analizuję dane...';
+  area.appendChild(div);area.scrollTop=area.scrollHeight;
+  await callAPI('Wygeneruj szczegółowy raport zgodnie z instrukcją i typem raportu. Grupuj logicznie, zakończ konkretnymi rekomendacjami.',div);
+  area.scrollTop=area.scrollHeight;
+}
+
+// ==================== GOOGLE DRIVE ====================
+const GDRIVE_CLIENT_ID = '554164046769-pknra8mtaijhomch0mq7hr6mic0sleu3.apps.googleusercontent.com';
+const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+let gdriveToken = null;
+let driveWeeks = [];
+let selectedWeekIds = new Set();
+
+function driveSignIn(){
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GDRIVE_CLIENT_ID,
+    scope: GDRIVE_SCOPES,
+    callback: (resp) => {
+      if(resp.error){console.error(resp);return;}
+      gdriveToken = resp.access_token;
+      document.getElementById('drive-auth-section').style.display='none';
+      document.getElementById('drive-connected').style.display='block';
+      document.getElementById('drive-status').textContent='Szukam folderu PERSONALNI Raporty...';
+      loadDriveFolders();
+    }
+  });
+  client.requestAccessToken();
+}
+
+function driveSignOut(){
+  if(gdriveToken) google.accounts.oauth2.revoke(gdriveToken);
+  gdriveToken=null; driveWeeks=[]; selectedWeekIds.clear();
+  document.getElementById('drive-auth-section').style.display='block';
+  document.getElementById('drive-connected').style.display='none';
+  document.getElementById('drive-weeks-list').innerHTML='';
+  document.getElementById('drive-load-section').style.display='none';
+}
+
+async function driveGet(url){
+  const r=await fetch(url,{headers:{Authorization:'Bearer '+gdriveToken}});
+  if(!r.ok)throw new Error('Drive API error: '+r.status);
+  return r.json();
+}
+
+async function loadDriveFolders(){
+  const btn=document.getElementById('btn-refresh-drive');
+  btn.textContent='Ładowanie...'; btn.disabled=true;
+  try{
+    const statusEl=document.getElementById('drive-status');
+    statusEl.textContent='Szukam folderu PERSONALNI Raporty...';
+
+    // Find root folder
+    const rootQ=encodeURIComponent("name='PERSONALNI Raporty' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+    const rootRes=await driveGet(`https://www.googleapis.com/drive/v3/files?q=${rootQ}&fields=files(id,name)`);
+    if(!rootRes.files||!rootRes.files.length){
+      statusEl.textContent='Nie znaleziono folderu "PERSONALNI Raporty" na Drive. Utwórz go i dodaj podfoldery tygodniowe.';
+      btn.textContent='Odśwież listę tygodni'; btn.disabled=false;
+      return;
+    }
+    const rootId=rootRes.files[0].id;
+    statusEl.textContent='Znaleziono folder. Pobieram listę tygodni...';
+
+    // Find week subfolders
+    const weeksQ=encodeURIComponent(`'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const weeksRes=await driveGet(`https://www.googleapis.com/drive/v3/files?q=${weeksQ}&fields=files(id,name)&orderBy=name`);
+    driveWeeks=weeksRes.files||[];
+
+    if(!driveWeeks.length){
+      statusEl.textContent='Folder "PERSONALNI Raporty" jest pusty. Dodaj podfoldery tygodniowe.';
+      btn.textContent='Odśwież listę tygodni'; btn.disabled=false;
+      return;
+    }
+
+    statusEl.textContent=`Znaleziono ${driveWeeks.length} tygodni. Zaznacz które chcesz wczytać.`;
+    renderWeeksList();
+  }catch(e){
+    document.getElementById('drive-status').textContent='Błąd: '+e.message;
+  }
+  btn.textContent='Odśwież listę tygodni'; btn.disabled=false;
+}
+
+function renderWeeksList(){
+  const el=document.getElementById('drive-weeks-list');
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-outline" onclick="selectAllWeeks()" style="font-size:12px;padding:5px 10px">Zaznacz wszystkie</button>
+      <button class="btn btn-outline" onclick="selectedWeekIds.clear();renderWeeksList()" style="font-size:12px;padding:5px 10px">Odznacz wszystkie</button>
+    </div>`+
+    driveWeeks.map(w=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:4px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);cursor:pointer" onclick="toggleWeek('${w.id}',this)">
+      <div style="width:16px;height:16px;border-radius:3px;border:2px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${selectedWeekIds.has(w.id)?'var(--green)':'transparent'};border-color:${selectedWeekIds.has(w.id)?'var(--green)':'var(--border2)'}" id="chk-${w.id}">
+        ${selectedWeekIds.has(w.id)?'<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2" stroke="white" stroke-width="1.5" fill="none"/></svg>':''}
+      </div>
+      <span style="font-size:13.5px;color:var(--text)">${w.name}</span>
+    </div>`).join('');
+  document.getElementById('drive-load-section').style.display=selectedWeekIds.size>0?'block':'none';
+}
+
+function toggleWeek(id, el){
+  if(selectedWeekIds.has(id))selectedWeekIds.delete(id);
+  else selectedWeekIds.add(id);
+  renderWeeksList();
+}
+
+function selectAllWeeks(){
+  driveWeeks.forEach(w=>selectedWeekIds.add(w.id));
+  renderWeeksList();
+}
+
+async function loadSelectedWeeks(){
+  const btn=document.querySelector('#drive-load-section .btn-green');
+  btn.textContent='Wczytuję pliki...'; btn.disabled=true;
+  const statusEl=document.getElementById('drive-status');
+  try{
+    const selected=driveWeeks.filter(w=>selectedWeekIds.has(w.id));
+    let totalLoaded=0;
+    const loadedInfo=[];
+
+    for(const week of selected){
+      statusEl.textContent=`Pobieram: ${week.name}...`;
+      // List xlsx/csv files in week folder
+      const filesQ=encodeURIComponent(`'${week.id}' in parents and trashed=false and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='text/csv')`);
+      const filesRes=await driveGet(`https://www.googleapis.com/drive/v3/files?q=${filesQ}&fields=files(id,name,mimeType)`);
+      const files=filesRes.files||[];
+
+      for(const file of files){
+        if(loadedFiles.some(f=>f.driveId===file.id))continue;
+        const content=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:{Authorization:'Bearer '+gdriveToken}});
+        const blob=await content.blob();
+        const arr=await blob.arrayBuffer();
+        const isCSV=file.name.toLowerCase().endsWith('.csv');
+        const wb=XLSX.read(isCSV?await blob.text():arr,{type:isCSV?'string':'array',raw:false});
+        const parsed=parseFile(wb,file.name,FC[loadedFiles.length%FC.length]);
+        if(parsed){
+          parsed.driveId=file.id;
+          parsed.weekName=week.name;
+          loadedFiles.push(parsed);
+          totalLoaded++;
+        }
+      }
+      loadedInfo.push({week:week.name,files:files.length});
+    }
+
+    mergeDB(); renderFileList(); populateSelectors(); updateAllSections();
+    statusEl.textContent=`Wczytano ${totalLoaded} plików z ${selected.length} tygodni.`;
+
+    // Show summary
+    const sumEl=document.getElementById('drive-loaded-summary');
+    const listEl=document.getElementById('drive-loaded-list');
+    listEl.innerHTML=loadedInfo.map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text)">${i.week}</span><span style="color:var(--text3)">${i.files} pliki</span></div>`).join('');
+    sumEl.style.display='block';
+
+  }catch(e){
+    statusEl.textContent='Błąd podczas wczytywania: '+e.message;
+  }
+  btn.textContent='Wczytaj zaznaczone tygodnie ↗'; btn.disabled=false;
+}
+// ==================== END GOOGLE DRIVE ====================
+
+
+async function sendChat(){
+  const inp=document.getElementById('ci');
+  const q=inp.value.trim();if(!q)return;inp.value='';
+  const area=document.getElementById('chat-area');
+  area.innerHTML+=`<div class="mu">${q}</div>`;
+  const div=document.createElement('div');div.className='ma';
+  div.innerHTML='<span class="spinner"></span>';area.appendChild(div);area.scrollTop=area.scrollHeight;
+  await callAPI(q,div);
+  area.scrollTop=area.scrollHeight;
+}
+</script>
+</body>
+</html>
