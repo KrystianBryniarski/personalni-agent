@@ -150,6 +150,9 @@
     .hnum{font-weight:700;font-size:14px;color:var(--text);}
     .hlbl{color:var(--text3);font-size:10px;margin-top:2px;}
 
+    .period-tab{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:6px 14px;border-radius:var(--r);cursor:pointer;font-size:13px;font-family:inherit;transition:all .1s;}
+    .period-tab:hover{background:var(--bg);}
+    .period-tab.active{background:var(--green);color:white;border-color:var(--green);font-weight:600;}
     @media(max-width:640px){nav{display:none;}main{padding:1rem;}.mgrid4{grid-template-columns:1fr 1fr;}.rtgrid{grid-template-columns:1fr;}}
   </style>
 </head>
@@ -235,17 +238,44 @@
       </div>
     </div>
 
-    <!-- DATE FILTER (shared) -->
+    <!-- PERIOD SELECTOR (shared) -->
     <div id="date-filter-bar" class="card" style="margin-bottom:1rem;display:none">
-      <p class="clabel">Zakres dat</p>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <label style="font-size:13px;color:var(--text2);white-space:nowrap">Od:</label>
-        <input type="date" id="pf" oninput="updateAllSections()" style="width:auto">
-        <label style="font-size:13px;color:var(--text2);white-space:nowrap">Do:</label>
-        <input type="date" id="pt" oninput="updateAllSections()" style="width:auto">
-        <button class="btn btn-outline" onclick="document.getElementById('pf').value='';document.getElementById('pt').value='';updateAllSections()" style="font-size:12.5px;padding:6px 12px">Wyczyść</button>
+      <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="period-tab active" data-period="range" onclick="setPeriod('range')">Zakres dat</button>
+        <button class="period-tab" data-period="week" onclick="setPeriod('week')">Tydzień</button>
+        <button class="period-tab" data-period="month" onclick="setPeriod('month')">Miesiąc</button>
+        <button class="period-tab" data-period="year" onclick="setPeriod('year')">Rok</button>
+        <button class="period-tab" data-period="all" onclick="setPeriod('all')">Całościowo</button>
       </div>
-      <p style="font-size:11.5px;color:var(--text3);margin-top:5px">Bez dat — dane obejmują wszystkie wgrane wizyty.</p>
+
+      <div id="period-range" class="period-panel" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="font-size:13px;color:var(--text2);white-space:nowrap">Od:</label>
+        <input type="date" id="pf" oninput="applyCustomRange()" style="width:auto">
+        <label style="font-size:13px;color:var(--text2);white-space:nowrap">Do:</label>
+        <input type="date" id="pt" oninput="applyCustomRange()" style="width:auto">
+        <button class="btn btn-outline" onclick="document.getElementById('pf').value='';document.getElementById('pt').value='';applyCustomRange()" style="font-size:12.5px;padding:6px 12px">Wyczyść</button>
+      </div>
+
+      <div id="period-week" class="period-panel" style="display:none;align-items:center;gap:10px">
+        <label style="font-size:13px;color:var(--text2)">Tydzień:</label>
+        <select id="sel-week" onchange="applyWeekSelect()" style="max-width:360px"></select>
+      </div>
+
+      <div id="period-month" class="period-panel" style="display:none;align-items:center;gap:10px">
+        <label style="font-size:13px;color:var(--text2)">Miesiąc:</label>
+        <select id="sel-month" onchange="applyMonthSelect()" style="max-width:260px"></select>
+      </div>
+
+      <div id="period-year" class="period-panel" style="display:none;align-items:center;gap:10px">
+        <label style="font-size:13px;color:var(--text2)">Rok:</label>
+        <select id="sel-year" onchange="applyYearSelect()" style="max-width:180px"></select>
+      </div>
+
+      <div id="period-all" class="period-panel" style="display:none;font-size:13px;color:var(--text2)">
+        Od otwarcia studia (01.08.2024) do dziś.
+      </div>
+
+      <p id="period-info" style="font-size:11.5px;color:var(--text3);margin-top:8px"></p>
     </div>
 
     <!-- PODSUMOWANIE -->
@@ -644,12 +674,7 @@ function getFiltered(){
 function zakonczone(data){return data.filter(r=>r.status==='Zakończone');}
 
 function simplifyService(s){
-  if(s.includes('parze'))return'Trening w parze';
-  if(s.toLowerCase().includes('konsultacja dietet'))return'Konsultacja dietetyczna';
-  if(s.toLowerCase().includes('konsultacja'))return'Konsultacja przedtreningowa';
-  if(s.toLowerCase().includes('funkcjonalny'))return'Trening funkcjonalny';
-  if(s.toLowerCase().includes('trening'))return'Trening indywidualny';
-  return s.split('(')[0].trim()||s;
+  return (s||'').trim() || '(bez nazwy)';
 }
 
 function renderFileList(){
@@ -789,7 +814,7 @@ function renderPracownicy(d){
     const pct=Math.round(pd.wizyty/maxW*100);
     const avgV=pd.wizyty?Math.round(pd.wartosc/pd.wizyty):0;
     return`<div class="card">
-      <p class="clabel">${n}${ep?` <span style="font-weight:400;color:var(--text3)">· ${Math.round(ep.powracajacy*100)}% powracających</span>`:''}</p>
+      <p class="clabel">${n}</p>
       <div class="mgrid4" style="margin-bottom:.75rem">
         <div class="mc"><div class="mlbl">Wizyty</div><div class="mval">${pd.wizyty}</div></div>
         <div class="mc"><div class="mlbl">Wartość usług</div><div class="mval">${pd.wartosc.toLocaleString('pl')} zł</div></div>
@@ -826,26 +851,125 @@ function renderKlienci(d){
   const aktywni=d.aktywni;
   const sorted=aktywni.filter(c=>c.wartosc>0).sort((a,b)=>b.wartosc-a.wartosc);
   const maxV=sorted[0]?.wartosc||1;
-  const doOdzysk=d.nieaktywni.filter(c=>c.rez>=10).sort((a,b)=>b.rez-a.rez);
+  // New clients list sorted by first visit date (most recent first)
+  const noviSorted=[...d.nowi].sort((a,b)=>(b.p_dt||0)-(a.p_dt||0));
   el.innerHTML=`
   <div class="mgrid4">
     <div class="mc"><div class="mlbl">Wszyscy klienci</div><div class="mval">${aktywni.length}</div><div class="msub neutral">z co najmniej 1 wizytą</div></div>
     <div class="mc"><div class="mlbl">Nowi klienci</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
     <div class="mc"><div class="mlbl">Aktywni</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 14 dni temu</div></div>
-    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">${doOdzysk.length} do odzyskania</div></div>
+    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">bez wizyt ≥ 14 dni</div></div>
   </div>
   <div class="mgrid2">
     <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
     <div class="mc"><div class="mlbl">Śr. LTV klienta</div><div class="mval">${d.avgLTV.toLocaleString('pl')} zł</div><div class="msub neutral">śr. ${d.avgWizytyKlient} wizyt / klient</div></div>
   </div>
   <div class="card">
-    <p class="clabel">Top 15 klientów wg wartości</p>
-    ${sorted.slice(0,15).map(c=>{const p=Math.round(c.wartosc/maxV*100);return barRow(c.name,p,'#8e44ad',`${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak danych.</div>'}
+    <p class="clabel">Nowi klienci w wybranym okresie (${d.nowi.length})</p>
+    ${noviSorted.length?`<table class="dtable">
+      <thead><tr><th>Imię i nazwisko</th><th>Pierwsza wizyta</th><th style="text-align:right">Rezerwacji</th><th style="text-align:right">Wartość</th></tr></thead>
+      <tbody>${noviSorted.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.p_dt?c.p_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody>
+    </table>`:'<div class="empty">Brak nowych klientów w tym okresie.</div>'}
   </div>
   <div class="card">
-    <p class="clabel">Klienci do odzyskania (nieaktywni, ≥ 10 wizyt)</p>
-    ${doOdzysk.slice(0,15).map(c=>{const maxR=doOdzysk[0]?.rez||1;const p=Math.round(c.rez/maxR*100);return barRow(c.name,p,'#c0392b',`${c.rez} wizyt · ${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak klientów do odzyskania.</div>'}
+    <p class="clabel">Top 15 klientów wg wartości</p>
+    ${sorted.slice(0,15).map(c=>{const p=Math.round(c.wartosc/maxV*100);return barRow(c.name,p,'#8e44ad',`${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak danych.</div>'}
   </div>`;
+}
+
+let currentPeriod='range';
+
+function pad(n){return String(n).padStart(2,'0');}
+function toDateStr(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+
+function setPeriod(p){
+  currentPeriod=p;
+  document.querySelectorAll('.period-tab').forEach(t=>t.classList.toggle('active',t.dataset.period===p));
+  document.querySelectorAll('.period-panel').forEach(el=>el.style.display='none');
+  const panel=document.getElementById('period-'+p);
+  if(panel)panel.style.display='flex';
+  if(p==='range')panel.style.display='flex';
+  if(p==='all')panel.style.display='block';
+  populatePeriodSelectors();
+  // Auto-apply default based on period
+  if(p==='week'){const s=document.getElementById('sel-week');if(s.value)applyWeekSelect();else updateAllSections();}
+  else if(p==='month'){const s=document.getElementById('sel-month');if(s.value)applyMonthSelect();else updateAllSections();}
+  else if(p==='year'){const s=document.getElementById('sel-year');if(s.value)applyYearSelect();else updateAllSections();}
+  else if(p==='all'){const pf=document.getElementById('pf');const pt=document.getElementById('pt');pf.value='2024-08-01';pt.value=toDateStr(new Date());updateAllSections();}
+  else updateAllSections();
+}
+
+function populatePeriodSelectors(){
+  // Gather all week/month/year options from DB.wizyty dates
+  const weeks=new Map(); // key: monday ISO, value: {from, to, label}
+  const months=new Set();
+  const years=new Set();
+  DB.wizyty.forEach(w=>{
+    if(!w.dt)return;
+    const d=new Date(w.dt);
+    years.add(d.getFullYear());
+    months.add(`${d.getFullYear()}-${pad(d.getMonth()+1)}`);
+    // Monday of this week
+    const day=d.getDay();
+    const diff=d.getDate()-(day===0?6:day-1);
+    const mon=new Date(d.getFullYear(),d.getMonth(),diff);
+    const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+    const key=toDateStr(mon);
+    if(!weeks.has(key))weeks.set(key,{from:mon,to:sun,label:`${mon.toLocaleDateString('pl')} → ${sun.toLocaleDateString('pl')}`});
+  });
+
+  // Weeks: most recent first
+  const weekArr=[...weeks.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+  const selW=document.getElementById('sel-week');
+  const curW=selW.value;
+  selW.innerHTML='<option value="">— wybierz tydzień —</option>'+weekArr.map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+  if(curW&&weekArr.find(([k])=>k===curW))selW.value=curW;
+
+  // Months
+  const monthArr=[...months].sort().reverse();
+  const selM=document.getElementById('sel-month');
+  const curM=selM.value;
+  const monthLabels=['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec','Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+  selM.innerHTML='<option value="">— wybierz miesiąc —</option>'+monthArr.map(m=>{const[y,mo]=m.split('-');return`<option value="${m}">${monthLabels[+mo-1]} ${y}</option>`;}).join('');
+  if(curM&&monthArr.includes(curM))selM.value=curM;
+
+  // Years
+  const yearArr=[...years].sort().reverse();
+  const selY=document.getElementById('sel-year');
+  const curY=selY.value;
+  selY.innerHTML='<option value="">— wybierz rok —</option>'+yearArr.map(y=>`<option value="${y}">${y}</option>`).join('');
+  if(curY&&yearArr.includes(+curY))selY.value=curY;
+}
+
+function applyCustomRange(){updateAllSections();}
+
+function applyWeekSelect(){
+  const v=document.getElementById('sel-week').value;
+  if(!v){updateAllSections();return;}
+  const mon=new Date(v);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  document.getElementById('pf').value=toDateStr(mon);
+  document.getElementById('pt').value=toDateStr(sun);
+  updateAllSections();
+}
+
+function applyMonthSelect(){
+  const v=document.getElementById('sel-month').value;
+  if(!v){updateAllSections();return;}
+  const [y,m]=v.split('-').map(Number);
+  const first=new Date(y,m-1,1);
+  const last=new Date(y,m,0);
+  document.getElementById('pf').value=toDateStr(first);
+  document.getElementById('pt').value=toDateStr(last);
+  updateAllSections();
+}
+
+function applyYearSelect(){
+  const v=document.getElementById('sel-year').value;
+  if(!v){updateAllSections();return;}
+  document.getElementById('pf').value=`${v}-01-01`;
+  document.getElementById('pt').value=`${v}-12-31`;
+  updateAllSections();
 }
 
 function updateAllSections(){
@@ -853,6 +977,18 @@ function updateAllSections(){
   const bar=document.getElementById('date-filter-bar');
   if(bar)bar.style.display=hasData?'block':'none';
   if(!hasData)return;
+  populatePeriodSelectors();
+  // Update info line
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  const info=document.getElementById('period-info');
+  if(info){
+    if(pf||pt){
+      info.textContent=`Dane z zakresu: ${pf||'—'} → ${pt||'—'}`;
+    }else{
+      info.textContent='Bez dat — wszystkie wgrane dane.';
+    }
+  }
   const d=getCommonData();
   renderPodsumowanie(d);
   renderPracownicy(d);
