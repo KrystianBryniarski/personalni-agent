@@ -6,6 +6,7 @@
   <title>Agent Raportowy — PERSONALNI Studio Treningu</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
@@ -150,6 +151,11 @@
     .hnum{font-weight:700;font-size:14px;color:var(--text);}
     .hlbl{color:var(--text3);font-size:10px;margin-top:2px;}
 
+    .chart-box{position:relative;height:280px;margin-top:.5rem;}
+    .chart-controls{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;}
+    .gran-tab{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:4px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:inherit;transition:all .1s;}
+    .gran-tab:hover{background:var(--bg);}
+    .gran-tab.active{background:var(--green);color:white;border-color:var(--green);font-weight:600;}
     .period-tab{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:6px 14px;border-radius:var(--r);cursor:pointer;font-size:13px;font-family:inherit;transition:all .1s;}
     .period-tab:hover{background:var(--bg);}
     .period-tab.active{background:var(--green);color:white;border-color:var(--green);font-weight:600;}
@@ -800,6 +806,20 @@ function renderPodsumowanie(d){
   <div class="card">
     <p class="clabel">Obłożenie — godziny dnia</p>
     <div style="display:flex;gap:3px;align-items:flex-end;height:72px">${Object.keys(d.hC).map(Number).sort((a,b)=>a-b).map(h=>{const c=d.hC[h];const p=Math.round(c/Math.max(...Object.values(d.hC),1)*100);return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px"><div style="font-size:10px;color:var(--text3)">${c}</div><div style="width:100%;height:${Math.max(p*0.58,3)}px;background:var(--green);border-radius:2px 2px 0 0;opacity:.85"></div><div style="font-size:9px;color:var(--text3)">${h}</div></div>`;}).join('')}</div>
+  </div>
+  <div class="card">
+    <p class="clabel">Trendy — cała historia</p>
+    <div class="chart-controls">
+      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
+      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
+      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych</p>
+    <div class="chart-box"><canvas id="chart-visits"></canvas></div>
+    <p style="font-size:12px;color:var(--text3);margin:16px 0 4px">Wartość zrealizowanych usług</p>
+    <div class="chart-box"><canvas id="chart-value"></canvas></div>
+    <p style="font-size:12px;color:var(--text3);margin:16px 0 4px">Nowi klienci (pierwsza wizyta)</p>
+    <div class="chart-box"><canvas id="chart-new-clients"></canvas></div>
   </div>`;
 }
 
@@ -808,7 +828,18 @@ function renderPracownicy(d){
   const maxW=list[0]?.[1].wizyty||1;
   const el=document.getElementById('sec-pracownicy');
   if(!list.length){el.innerHTML='<div class="empty">Brak danych pracowników. Wgraj plik lista_wizyt.</div>';return;}
-  el.innerHTML=list.map(([n,pd])=>{
+  el.innerHTML=`<div class="card">
+    <p class="clabel">Trendy — porównanie trenerów</p>
+    <div class="chart-controls">
+      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
+      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
+      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych</p>
+    <div class="chart-box"><canvas id="chart-trainers-visits"></canvas></div>
+    <p style="font-size:12px;color:var(--text3);margin:16px 0 4px">Wartość zrealizowanych usług</p>
+    <div class="chart-box"><canvas id="chart-trainers-value"></canvas></div>
+  </div>`+list.map(([n,pd])=>{
     const cp=DB.czasPracy[n];
     const ep=DB.pracownicy.find(p=>p.name===n);
     const pct=Math.round(pd.wizyty/maxW*100);
@@ -832,7 +863,16 @@ function renderUslugi(d){
   const maxW=list[0]?.[1].wizyty||1;
   const el=document.getElementById('sec-uslugi');
   if(!list.length){el.innerHTML='<div class="empty">Brak danych usług. Wgraj plik lista_wizyt.</div>';return;}
-  el.innerHTML=`<div class="card"><p class="clabel">Popularność usług</p>`+
+  el.innerHTML=`<div class="card">
+    <p class="clabel">Trendy — porównanie usług</p>
+    <div class="chart-controls">
+      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
+      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
+      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych — per usługa</p>
+    <div class="chart-box" style="height:340px"><canvas id="chart-services"></canvas></div>
+  </div>`+`<div class="card"><p class="clabel">Popularność usług</p>`+
     list.map(([u,ud])=>{
       const pct=Math.round(ud.wizyty/maxW*100);
       const avgV=ud.wizyty?Math.round(ud.wartosc/ud.wizyty):0;
@@ -878,6 +918,128 @@ function renderKlienci(d){
 }
 
 let currentPeriod='range';
+let trendGranularity='month';
+const chartInstances={};
+
+// Color palette for multi-line charts
+const CHART_COLORS=['#126f43','#2980b9','#8e44ad','#c0392b','#d35400','#16a085','#f39c12','#27ae60','#2c3e50','#e74c3c','#9b59b6','#1abc9c'];
+
+function periodKey(date,gran){
+  if(gran==='week'){
+    const d=new Date(date);
+    const day=d.getDay();
+    const diff=d.getDate()-(day===0?6:day-1);
+    const mon=new Date(d.getFullYear(),d.getMonth(),diff);
+    return toDateStr(mon);
+  }
+  if(gran==='quarter'){
+    const q=Math.floor(date.getMonth()/3)+1;
+    return `${date.getFullYear()}-Q${q}`;
+  }
+  // month
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}`;
+}
+
+function periodLabel(key,gran){
+  if(gran==='week'){
+    const d=new Date(key);
+    const end=new Date(d); end.setDate(d.getDate()+6);
+    return `${pad(d.getDate())}.${pad(d.getMonth()+1)} - ${pad(end.getDate())}.${pad(end.getMonth()+1)}`;
+  }
+  if(gran==='quarter'){return key;}
+  const [y,m]=key.split('-');
+  const names=['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  return `${names[+m-1]} ${y.slice(2)}`;
+}
+
+function getSortedPeriods(gran){
+  const set=new Set();
+  DB.wizyty.forEach(w=>{if(w.dt&&w.status==='Zakończone')set.add(periodKey(w.dt,gran));});
+  return [...set].sort();
+}
+
+function setTrendGran(g){
+  trendGranularity=g;
+  document.querySelectorAll('.gran-tab').forEach(t=>t.classList.toggle('active',t.dataset.gran===g));
+  renderTrendCharts();
+}
+
+function makeChart(canvasId,type,labels,datasets,yFormat){
+  if(chartInstances[canvasId]){chartInstances[canvasId].destroy();}
+  const ctx=document.getElementById(canvasId);
+  if(!ctx)return;
+  chartInstances[canvasId]=new Chart(ctx,{
+    type,
+    data:{labels,datasets},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{display:datasets.length>1,position:'top',labels:{font:{size:11},boxWidth:12,padding:10}},
+        tooltip:{callbacks:yFormat?{label:(ctx)=>`${ctx.dataset.label||''}: ${yFormat(ctx.parsed.y)}`}:{}}
+      },
+      scales:{
+        x:{ticks:{font:{size:11},color:'#7a7a76'},grid:{display:false}},
+        y:{beginAtZero:true,ticks:{font:{size:11},color:'#7a7a76',callback:yFormat||((v)=>v)},grid:{color:'#e0deda'}}
+      }
+    }
+  });
+}
+
+function renderTrendCharts(){
+  const periods=getSortedPeriods(trendGranularity);
+  const labels=periods.map(k=>periodLabel(k,trendGranularity));
+  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone');
+
+  // ======== PODSUMOWANIE: 3 wykresy ========
+  // Liczba wizyt
+  const visitsMap={};periods.forEach(p=>visitsMap[p]=0);
+  zakonczone.forEach(w=>{if(w.dt){const k=periodKey(w.dt,trendGranularity);if(k in visitsMap)visitsMap[k]++;}});
+  makeChart('chart-visits','bar',labels,[{label:'Wizyty',data:periods.map(p=>visitsMap[p]),backgroundColor:'#126f43',borderRadius:4}]);
+
+  // Wartość usług
+  const valueMap={};periods.forEach(p=>valueMap[p]=0);
+  zakonczone.forEach(w=>{if(w.dt){const k=periodKey(w.dt,trendGranularity);if(k in valueMap)valueMap[k]+=w.wartosc;}});
+  makeChart('chart-value','line',labels,[{label:'Wartość',data:periods.map(p=>Math.round(valueMap[p])),borderColor:'#126f43',backgroundColor:'rgba(18,111,67,.1)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#126f43'}],
+    (v)=>v.toLocaleString('pl')+' zł');
+
+  // Nowi klienci
+  const newClientsMap={};periods.forEach(p=>newClientsMap[p]=0);
+  DB.klienci.forEach(c=>{if(c.p_dt&&c.rez>0){const k=periodKey(c.p_dt,trendGranularity);if(k in newClientsMap)newClientsMap[k]++;}});
+  makeChart('chart-new-clients','line',labels,[{label:'Nowi klienci',data:periods.map(p=>newClientsMap[p]),borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,.1)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#2980b9'}]);
+
+  // ======== PRACOWNICY: multi-line ========
+  const trainers=[...new Set(zakonczone.map(w=>w.pracownik).filter(Boolean))].sort();
+  // Visits per trainer per period
+  const trainerVisits={};trainers.forEach(t=>{trainerVisits[t]={};periods.forEach(p=>trainerVisits[t][p]=0);});
+  zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKey(w.dt,trendGranularity);if(trainerVisits[w.pracownik]&&k in trainerVisits[w.pracownik])trainerVisits[w.pracownik][k]++;}});
+  makeChart('chart-trainers-visits','line',labels,trainers.map((t,i)=>({
+    label:t,data:periods.map(p=>trainerVisits[t][p]),
+    borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
+    fill:false,tension:.3,pointRadius:3
+  })));
+
+  // Value per trainer per period
+  const trainerValue={};trainers.forEach(t=>{trainerValue[t]={};periods.forEach(p=>trainerValue[t][p]=0);});
+  zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKey(w.dt,trendGranularity);if(trainerValue[w.pracownik]&&k in trainerValue[w.pracownik])trainerValue[w.pracownik][k]+=w.wartosc;}});
+  makeChart('chart-trainers-value','line',labels,trainers.map((t,i)=>({
+    label:t,data:periods.map(p=>Math.round(trainerValue[t][p])),
+    borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
+    fill:false,tension:.3,pointRadius:3
+  })),(v)=>v.toLocaleString('pl')+' zł');
+
+  // ======== USŁUGI: multi-line ========
+  const services=[...new Set(zakonczone.map(w=>w.usluga).filter(Boolean))].sort();
+  const serviceVisits={};services.forEach(s=>{serviceVisits[s]={};periods.forEach(p=>serviceVisits[s][p]=0);});
+  zakonczone.forEach(w=>{if(w.dt&&w.usluga){const k=periodKey(w.dt,trendGranularity);if(serviceVisits[w.usluga]&&k in serviceVisits[w.usluga])serviceVisits[w.usluga][k]++;}});
+  makeChart('chart-services','line',labels,services.map((s,i)=>({
+    label:s,data:periods.map(p=>serviceVisits[s][p]),
+    borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
+    fill:false,tension:.3,pointRadius:3
+  })));
+}
+
+
 
 function pad(n){return String(n).padStart(2,'0');}
 function toDateStr(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
@@ -994,6 +1156,8 @@ function updateAllSections(){
   renderPracownicy(d);
   renderUslugi(d);
   renderKlienci(d);
+  // Defer chart rendering to allow DOM to update
+  setTimeout(renderTrendCharts,50);
 }
 
 function buildContext(){
