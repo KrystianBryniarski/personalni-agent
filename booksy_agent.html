@@ -488,7 +488,8 @@ function parseFile(wb,name,color){
   const ws=wb.Sheets[wb.SheetNames[0]];
   const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
   const type=detectFileType(raw);
-  return{name,color,type,raw};
+  const reportEnd=extractReportEndDate(raw);
+  return{name,color,type,raw,reportEnd};
 }
 
 function parseTime(s){
@@ -497,11 +498,31 @@ function parseTime(s){
   return m?parseInt(m[1])*60+parseInt(m[2]):0;
 }
 
+function extractReportEndDate(raw){
+  // Look for "Okres od X do Y" in first 15 rows
+  for(let i=0;i<Math.min(raw.length,15);i++){
+    const row=(raw[i]||[]).map(c=>String(c||''));
+    for(const cell of row){
+      const m=cell.match(/Okres\s+od\s+\d{1,2}\.\d{1,2}\.\d{4}\s+do\s+(\d{1,2})\.(\d{1,2})\.(\d{4})/i);
+      if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+    }
+  }
+  return null;
+}
+
 function mergeDB(){
   DB={wizyty:[],klienci:[],pracownicy:[],czasPracy:{},raportWizyt:{}};
+  // For client list: only use the file with the latest reportEnd
+  const clientFiles=loadedFiles.filter(f=>f.type==='klienci');
+  let latestClientFile=null;
+  clientFiles.forEach(f=>{
+    if(!latestClientFile||(f.reportEnd&&(!latestClientFile.reportEnd||f.reportEnd>latestClientFile.reportEnd))){
+      latestClientFile=f;
+    }
+  });
   loadedFiles.forEach(f=>{
     if(f.type==='wizyty')parseWizyty(f.raw);
-    else if(f.type==='klienci')parseKlienci(f.raw);
+    else if(f.type==='klienci'){if(f===latestClientFile)parseKlienci(f.raw);}
     else if(f.type==='efektywnosc')parseEfektywnosc(f.raw);
     else if(f.type==='czas_pracy')parseCzasPracy(f.raw);
     else if(f.type==='raport_wizyt')parseRaportWizyt(f.raw);
@@ -1083,12 +1104,23 @@ function analyzeImportedFiles(){
     else analysis.unchangedWizyty++;
   });
 
-  DB.klienci.forEach(c=>{
-    const existing=persistentDB.klienci[c.name];
-    if(!existing){analysis.newClients.push(c);return;}
-    const changed=existing.rez!==c.rez||existing.wartosc!==c.wartosc;
-    if(changed)analysis.updatedClients.push({old:existing,new:c});
-  });
+  // Only show client changes if this batch has a newer client list than what's in DB
+  const clientFiles=loadedFiles.filter(f=>f.type==='klienci'&&f.reportEnd);
+  let sessionNewest=null;
+  clientFiles.forEach(f=>{if(!sessionNewest||f.reportEnd>sessionNewest)sessionNewest=f.reportEnd;});
+  const persistedClientDate=persistentDB.klienciUpdatedAt?new Date(persistentDB.klienciUpdatedAt):null;
+  const clientListIsNewer=sessionNewest&&(!persistedClientDate||sessionNewest>persistedClientDate);
+  if(clientListIsNewer){
+    DB.klienci.forEach(c=>{
+      const existing=persistentDB.klienci[c.name];
+      if(!existing){analysis.newClients.push(c);return;}
+      const changed=existing.rez!==c.rez||existing.wartosc!==c.wartosc;
+      if(changed)analysis.updatedClients.push({old:existing,new:c});
+    });
+    analysis.clientListUpdate={newer:true,date:sessionNewest};
+  }else if(clientFiles.length){
+    analysis.clientListUpdate={newer:false,sessionDate:sessionNewest,currentDate:persistedClientDate};
+  }
 
   return analysis;
 }
@@ -1098,18 +1130,27 @@ async function mergeIntoPersistent(){
   DB.wizyty.forEach(w=>{
     if(w.id){
       const serialized={...w};
-      delete serialized.dt; // will be recomputed from dt_raw
+      delete serialized.dt;
       persistentDB.wizyty[w.id]=serialized;
     }
   });
-  // Replace clients (keyed by name) - newer data wins
-  DB.klienci.forEach(c=>{
-    persistentDB.klienci[c.name]={
-      ...c,
-      p_dt:c.p_dt?c.p_dt.toISOString():null,
-      o_dt:c.o_dt?c.o_dt.toISOString():null
-    };
-  });
+  // Find newest client-list file in this session
+  const clientFiles=loadedFiles.filter(f=>f.type==='klienci'&&f.reportEnd);
+  let sessionNewest=null;
+  clientFiles.forEach(f=>{if(!sessionNewest||f.reportEnd>sessionNewest)sessionNewest=f.reportEnd;});
+  const persistedClientDate=persistentDB.klienciUpdatedAt?new Date(persistentDB.klienciUpdatedAt):null;
+  // Only overwrite client list if session file is newer than what's in DB
+  if(sessionNewest&&(!persistedClientDate||sessionNewest>persistedClientDate)){
+    persistentDB.klienci={};
+    DB.klienci.forEach(c=>{
+      persistentDB.klienci[c.name]={
+        ...c,
+        p_dt:c.p_dt?c.p_dt.toISOString():null,
+        o_dt:c.o_dt?c.o_dt.toISOString():null
+      };
+    });
+    persistentDB.klienciUpdatedAt=sessionNewest.toISOString();
+  }
   persistentDB.pracownicy=DB.pracownicy;
   persistentDB.czasPracy=DB.czasPracy;
   await saveDBToDrive(false);
@@ -1299,6 +1340,7 @@ function showDiffPreview(a, folderNames){
     </div>
     ${a.updatedWizyty.length?`<div style="margin-top:1rem"><p class="clabel">Przykłady zmian (pierwsze 5)</p>${a.updatedWizyty.slice(0,5).map(u=>`<div style="font-size:12px;padding:6px 8px;background:var(--bg);border-radius:var(--r);margin-bottom:4px"><strong>${u.new.klient}</strong> · ${u.new.dt_raw} · ${u.old.status}→${u.new.status}, ${u.old.wartosc}zł→${u.new.wartosc}zł</div>`).join('')}</div>`:''}
     ${a.updatedClients.length?`<p class="clabel" style="margin-top:1rem">Zaktualizowani klienci: ${a.updatedClients.length}</p>`:''}
+    ${a.clientListUpdate?`<div style="margin-top:1rem;padding:10px 12px;background:var(--bg);border-radius:var(--r);font-size:12px;color:var(--text2)">${a.clientListUpdate.newer?`ℹ️ Lista klientów zostanie zaktualizowana do stanu z ${a.clientListUpdate.date.toLocaleDateString('pl')}.`:`⚠️ Lista klientów z tego raportu (${a.clientListUpdate.sessionDate?a.clientListUpdate.sessionDate.toLocaleDateString('pl'):'—'}) jest starsza niż obecna w bazie (${a.clientListUpdate.currentDate?a.clientListUpdate.currentDate.toLocaleDateString('pl'):'—'}) i zostanie pominięta.`}</div>`:''}
   `;
   document.getElementById('diff-card').style.display='block';
 }
