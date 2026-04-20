@@ -275,12 +275,12 @@
     <!-- DRIVE -->
     <div class="view" id="view-drive">
       <p class="page-title">Google Drive</p>
+
       <div class="card">
         <p class="clabel">Połączenie z Google Drive</p>
-        <p style="font-size:13.5px;color:var(--text2);margin-bottom:14px;line-height:1.6">Połącz z Google Drive aby agent automatycznie pobierał pliki z folderu <strong>PERSONALNI Raporty</strong>. Wybierz tygodnie które chcesz analizować.</p>
         <div id="drive-auth-section">
+          <p style="font-size:13.5px;color:var(--text2);margin-bottom:14px;line-height:1.6">Połącz z Google Drive aby agent miał dostęp do bazy danych i folderu <strong>PERSONALNI Raporty</strong>.</p>
           <button class="btn btn-green" onclick="driveSignIn()" id="btn-signin">Zaloguj się przez Google</button>
-          <p style="font-size:11.5px;color:var(--text3);margin-top:8px">Agent poprosi o dostęp do plików na Twoim Google Drive.</p>
         </div>
         <div id="drive-connected" style="display:none">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -289,16 +289,36 @@
             <button class="btn btn-outline" onclick="driveSignOut()" style="font-size:12px;padding:4px 10px;margin-left:auto">Rozłącz</button>
           </div>
           <div id="drive-status" style="font-size:13px;color:var(--text3);margin-bottom:12px"></div>
-          <button class="btn btn-green" onclick="loadDriveFolders()" id="btn-refresh-drive" style="margin-bottom:1rem">Odśwież listę tygodni</button>
-          <div id="drive-weeks-list"></div>
-          <div id="drive-load-section" style="display:none;margin-top:1rem">
-            <button class="btn btn-green btn-full" onclick="loadSelectedWeeks()">Wczytaj zaznaczone tygodnie ↗</button>
-          </div>
         </div>
       </div>
-      <div id="drive-loaded-summary" style="display:none" class="card">
-        <p class="clabel">Wczytane dane z Drive</p>
-        <div id="drive-loaded-list"></div>
+
+      <div id="db-card" style="display:none" class="card">
+        <p class="clabel">Baza danych</p>
+        <div class="mgrid4">
+          <div class="mc"><div class="mlbl">Wizyty w bazie</div><div class="mval" id="db-wizyty">0</div></div>
+          <div class="mc"><div class="mlbl">Klienci w bazie</div><div class="mval" id="db-klienci">0</div></div>
+          <div class="mc"><div class="mlbl">Ostatnia aktualizacja</div><div class="mval" id="db-lastupdate" style="font-size:14px">—</div></div>
+          <div class="mc"><div class="mlbl">Status</div><div class="mval" id="db-status" style="font-size:14px;color:var(--green)">Wczytano</div></div>
+        </div>
+      </div>
+
+      <div id="drive-folders-card" style="display:none" class="card">
+        <p class="clabel">Wczytaj nowe raporty z Drive</p>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:10px">Zaznacz foldery z nowymi raportami do dodania do bazy. Agent sam wykryje duplikaty po ID rezerwacji.</p>
+        <button class="btn btn-green" onclick="loadDriveFolders()" id="btn-refresh-drive" style="margin-bottom:1rem">Odśwież listę folderów</button>
+        <div id="drive-weeks-list"></div>
+        <div id="drive-load-section" style="display:none;margin-top:1rem">
+          <button class="btn btn-green btn-full" onclick="loadSelectedWeeks()">Analizuj zaznaczone raporty ↗</button>
+        </div>
+      </div>
+
+      <div id="diff-card" style="display:none" class="card">
+        <p class="clabel">Podgląd zmian</p>
+        <div id="diff-content"></div>
+        <div style="display:flex;gap:8px;margin-top:1rem">
+          <button class="btn btn-green" onclick="confirmMerge()">Zapisz do bazy</button>
+          <button class="btn btn-outline" onclick="cancelMerge()">Anuluj</button>
+        </div>
       </div>
     </div>
 
@@ -500,7 +520,7 @@ function parseWizyty(raw){
   const hi=findHeaderRow(raw,['Status','Klient']);
   if(hi<0)return;
   const hdr=raw[hi].map(c=>String(c||'').trim());
-  const ci={dt:hdr.indexOf('Data i godzina'),usluga:hdr.indexOf('Usługa'),klient:hdr.indexOf('Klient'),pracownik:hdr.indexOf('Pracownik'),wartosc:hdr.findIndex(h=>h.includes('Wartość usług')),status:hdr.indexOf('Status')};
+  const ci={dt:hdr.indexOf('Data i godzina'),id:hdr.indexOf('ID rezerwacji'),usluga:hdr.indexOf('Usługa'),klient:hdr.indexOf('Klient'),pracownik:hdr.indexOf('Pracownik'),wartosc:hdr.findIndex(h=>h.includes('Wartość usług')),status:hdr.indexOf('Status')};
   for(let i=hi+1;i<raw.length;i++){
     const r=raw[i];
     if(!r||!r[ci.status])continue;
@@ -511,7 +531,7 @@ function parseWizyty(raw){
     const m=dt_raw.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{2}):(\d{2})/);
     if(m)dt=new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]);
     if(dt&&dt>new Date())continue;
-    DB.wizyty.push({dt,dt_raw,usluga:String(r[ci.usluga]||'').trim(),klient:String(r[ci.klient]||'').trim(),pracownik:String(r[ci.pracownik]||'').trim(),wartosc:parseFloat(r[ci.wartosc])||0,status:st});
+    DB.wizyty.push({id:String(r[ci.id]||'').trim(),dt,dt_raw,usluga:String(r[ci.usluga]||'').trim(),klient:String(r[ci.klient]||'').trim(),pracownik:String(r[ci.pracownik]||'').trim(),wartosc:parseFloat(r[ci.wartosc])||0,status:st});
   }
 }
 
@@ -969,9 +989,144 @@ async function genReport(){
   area.scrollTop=area.scrollHeight;
 }
 
+// ==================== BAZA DANYCH ====================
+const DB_FILENAME = 'baza.json';
+let rootFolderId = null;
+let dbFileId = null;
+let persistentDB = {wizyty:{}, klienci:{}, pracownicy:[], czasPracy:{}, lastUpdate:null};
+
+async function findOrCreateDB(){
+  // Find root folder
+  const rootQ=encodeURIComponent("name='PERSONALNI Raporty' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  const rootRes=await driveGet(`https://www.googleapis.com/drive/v3/files?q=${rootQ}&fields=files(id,name)`);
+  if(!rootRes.files||!rootRes.files.length)throw new Error('Folder "PERSONALNI Raporty" nie istnieje');
+  rootFolderId=rootRes.files[0].id;
+  // Find baza.json in root folder
+  const dbQ=encodeURIComponent(`name='${DB_FILENAME}' and '${rootFolderId}' in parents and trashed=false`);
+  const dbRes=await driveGet(`https://www.googleapis.com/drive/v3/files?q=${dbQ}&fields=files(id,name)`);
+  if(dbRes.files&&dbRes.files.length){
+    dbFileId=dbRes.files[0].id;
+    return await loadDBFromDrive();
+  }
+  // Doesn't exist - create empty
+  persistentDB={wizyty:{}, klienci:{}, pracownicy:[], czasPracy:{}, lastUpdate:null};
+  await saveDBToDrive(true);
+  return persistentDB;
+}
+
+async function loadDBFromDrive(){
+  if(!dbFileId)return null;
+  const r=await fetch(`https://www.googleapis.com/drive/v3/files/${dbFileId}?alt=media`,{headers:{Authorization:'Bearer '+gdriveToken}});
+  if(!r.ok)throw new Error('Nie mogę wczytać bazy z Drive');
+  persistentDB=await r.json();
+  // Backward compatibility
+  if(!persistentDB.wizyty)persistentDB.wizyty={};
+  if(!persistentDB.klienci)persistentDB.klienci={};
+  return persistentDB;
+}
+
+async function saveDBToDrive(isNew=false){
+  persistentDB.lastUpdate=new Date().toISOString();
+  const body=JSON.stringify(persistentDB);
+  const metadata={name:DB_FILENAME,mimeType:'application/json'};
+  if(isNew)metadata.parents=[rootFolderId];
+
+  const boundary='-------booksy-'+Date.now();
+  const delim='\r\n--'+boundary+'\r\n';
+  const closeDelim='\r\n--'+boundary+'--';
+  const multipart=delim+'Content-Type: application/json\r\n\r\n'+JSON.stringify(metadata)+delim+'Content-Type: application/json\r\n\r\n'+body+closeDelim;
+
+  const url=isNew?'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart':`https://www.googleapis.com/upload/drive/v3/files/${dbFileId}?uploadType=multipart`;
+  const method=isNew?'POST':'PATCH';
+
+  const r=await fetch(url,{method,headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':`multipart/related; boundary=${boundary}`},body:multipart});
+  if(!r.ok)throw new Error('Zapis bazy nieudany: '+r.status);
+  const data=await r.json();
+  if(isNew)dbFileId=data.id;
+  return data;
+}
+
+function loadPersistentIntoDB(){
+  // Convert persistentDB (keyed by id) back into working DB arrays
+  DB.wizyty=Object.values(persistentDB.wizyty).map(w=>{
+    let dt=null;
+    if(w.dt_raw){
+      const m=w.dt_raw.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+      if(m)dt=new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]);
+    }
+    return{...w,dt};
+  }).filter(w=>!w.dt||w.dt<=new Date());
+  DB.klienci=Object.values(persistentDB.klienci).map(c=>({
+    ...c,
+    p_dt:c.p_dt?new Date(c.p_dt):null,
+    o_dt:c.o_dt?new Date(c.o_dt):null
+  }));
+  DB.pracownicy=persistentDB.pracownicy||[];
+  DB.czasPracy=persistentDB.czasPracy||{};
+}
+
+function analyzeImportedFiles(){
+  // Compare loadedFiles (current session) against persistentDB
+  // Return {new: [...], updated: [...], unchanged: [...], newClients, updatedClients}
+  const analysis={newWizyty:[],updatedWizyty:[],unchangedWizyty:0,newClients:[],updatedClients:[]};
+
+  // First collect all wizyty from loadedFiles
+  const sessionWizyty=DB.wizyty; // already parsed from current uploads
+
+  sessionWizyty.forEach(w=>{
+    if(!w.id){analysis.newWizyty.push(w);return;}
+    const existing=persistentDB.wizyty[w.id];
+    if(!existing){analysis.newWizyty.push(w);return;}
+    // Compare key fields
+    const changed=existing.status!==w.status||existing.wartosc!==w.wartosc||existing.pracownik!==w.pracownik;
+    if(changed)analysis.updatedWizyty.push({old:existing,new:w});
+    else analysis.unchangedWizyty++;
+  });
+
+  DB.klienci.forEach(c=>{
+    const existing=persistentDB.klienci[c.name];
+    if(!existing){analysis.newClients.push(c);return;}
+    const changed=existing.rez!==c.rez||existing.wartosc!==c.wartosc;
+    if(changed)analysis.updatedClients.push({old:existing,new:c});
+  });
+
+  return analysis;
+}
+
+async function mergeIntoPersistent(){
+  // Add/update wizyty by id
+  DB.wizyty.forEach(w=>{
+    if(w.id){
+      const serialized={...w};
+      delete serialized.dt; // will be recomputed from dt_raw
+      persistentDB.wizyty[w.id]=serialized;
+    }
+  });
+  // Replace clients (keyed by name) - newer data wins
+  DB.klienci.forEach(c=>{
+    persistentDB.klienci[c.name]={
+      ...c,
+      p_dt:c.p_dt?c.p_dt.toISOString():null,
+      o_dt:c.o_dt?c.o_dt.toISOString():null
+    };
+  });
+  persistentDB.pracownicy=DB.pracownicy;
+  persistentDB.czasPracy=DB.czasPracy;
+  await saveDBToDrive(false);
+}
+
+function dbStats(){
+  return{
+    wizyty:Object.keys(persistentDB.wizyty||{}).length,
+    klienci:Object.keys(persistentDB.klienci||{}).length,
+    lastUpdate:persistentDB.lastUpdate
+  };
+}
+// ==================== END BAZA DANYCH ====================
+
 // ==================== GOOGLE DRIVE ====================
 const GDRIVE_CLIENT_ID = '554164046769-pknra8mtaijhomch0mq7hr6mic0sleu3.apps.googleusercontent.com';
-const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+const GDRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
 let gdriveToken = null;
 let driveWeeks = [];
 let selectedWeekIds = new Set();
@@ -980,23 +1135,45 @@ function driveSignIn(){
   const client = google.accounts.oauth2.initTokenClient({
     client_id: GDRIVE_CLIENT_ID,
     scope: GDRIVE_SCOPES,
-    callback: (resp) => {
+    callback: async (resp) => {
       if(resp.error){console.error(resp);return;}
       gdriveToken = resp.access_token;
       document.getElementById('drive-auth-section').style.display='none';
       document.getElementById('drive-connected').style.display='block';
-      document.getElementById('drive-status').textContent='Szukam folderu PERSONALNI Raporty...';
-      loadDriveFolders();
+      document.getElementById('drive-status').textContent='Wczytuję bazę danych...';
+      try{
+        await findOrCreateDB();
+        loadPersistentIntoDB();
+        renderFileList(); populateSelectors(); updateAllSections();
+        renderDBCard();
+        document.getElementById('db-card').style.display='block';
+        document.getElementById('drive-folders-card').style.display='block';
+        document.getElementById('drive-status').textContent=`Baza wczytana. Możesz dodać nowe raporty z Drive.`;
+      }catch(e){
+        document.getElementById('drive-status').textContent='Błąd: '+e.message;
+      }
     }
   });
   client.requestAccessToken();
 }
 
+function renderDBCard(){
+  const s=dbStats();
+  document.getElementById('db-wizyty').textContent=s.wizyty;
+  document.getElementById('db-klienci').textContent=s.klienci;
+  document.getElementById('db-lastupdate').textContent=s.lastUpdate?new Date(s.lastUpdate).toLocaleString('pl'):'—';
+}
+
 function driveSignOut(){
   if(gdriveToken) google.accounts.oauth2.revoke(gdriveToken);
   gdriveToken=null; driveWeeks=[]; selectedWeekIds.clear();
+  dbFileId=null; rootFolderId=null;
+  persistentDB={wizyty:{},klienci:{},pracownicy:[],czasPracy:{},lastUpdate:null};
   document.getElementById('drive-auth-section').style.display='block';
   document.getElementById('drive-connected').style.display='none';
+  document.getElementById('db-card').style.display='none';
+  document.getElementById('drive-folders-card').style.display='none';
+  document.getElementById('diff-card').style.display='none';
   document.getElementById('drive-weeks-list').innerHTML='';
   document.getElementById('drive-load-section').style.display='none';
 }
@@ -1074,51 +1251,82 @@ function selectAllWeeks(){
 
 async function loadSelectedWeeks(){
   const btn=document.querySelector('#drive-load-section .btn-green');
-  btn.textContent='Wczytuję pliki...'; btn.disabled=true;
+  btn.textContent='Analizuję pliki...'; btn.disabled=true;
   const statusEl=document.getElementById('drive-status');
   try{
     const selected=driveWeeks.filter(w=>selectedWeekIds.has(w.id));
-    let totalLoaded=0;
-    const loadedInfo=[];
+    // Reset session DB to not mix with persistent
+    DB={wizyty:[],klienci:[],pracownicy:[],czasPracy:{},raportWizyt:{}};
+    loadedFiles=[];
+    let totalFiles=0;
 
     for(const week of selected){
       statusEl.textContent=`Pobieram: ${week.name}...`;
-      // List xlsx/csv files in week folder
       const filesQ=encodeURIComponent(`'${week.id}' in parents and trashed=false and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='text/csv')`);
       const filesRes=await driveGet(`https://www.googleapis.com/drive/v3/files?q=${filesQ}&fields=files(id,name,mimeType)`);
       const files=filesRes.files||[];
-
       for(const file of files){
-        if(loadedFiles.some(f=>f.driveId===file.id))continue;
         const content=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:{Authorization:'Bearer '+gdriveToken}});
         const blob=await content.blob();
         const arr=await blob.arrayBuffer();
         const isCSV=file.name.toLowerCase().endsWith('.csv');
         const wb=XLSX.read(isCSV?await blob.text():arr,{type:isCSV?'string':'array',raw:false});
         const parsed=parseFile(wb,file.name,FC[loadedFiles.length%FC.length]);
-        if(parsed){
-          parsed.driveId=file.id;
-          parsed.weekName=week.name;
-          loadedFiles.push(parsed);
-          totalLoaded++;
-        }
+        if(parsed){parsed.driveId=file.id;parsed.weekName=week.name;loadedFiles.push(parsed);totalFiles++;}
       }
-      loadedInfo.push({week:week.name,files:files.length});
     }
 
-    mergeDB(); renderFileList(); populateSelectors(); updateAllSections();
-    statusEl.textContent=`Wczytano ${totalLoaded} plików z ${selected.length} tygodni.`;
-
-    // Show summary
-    const sumEl=document.getElementById('drive-loaded-summary');
-    const listEl=document.getElementById('drive-loaded-list');
-    listEl.innerHTML=loadedInfo.map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text)">${i.week}</span><span style="color:var(--text3)">${i.files} pliki</span></div>`).join('');
-    sumEl.style.display='block';
-
+    mergeDB();
+    const analysis=analyzeImportedFiles();
+    showDiffPreview(analysis, selected.map(w=>w.name));
+    statusEl.textContent=`Przeanalizowano ${totalFiles} plików z ${selected.length} folderów.`;
   }catch(e){
-    statusEl.textContent='Błąd podczas wczytywania: '+e.message;
+    statusEl.textContent='Błąd: '+e.message;
+    console.error(e);
   }
-  btn.textContent='Wczytaj zaznaczone tygodnie ↗'; btn.disabled=false;
+  btn.textContent='Analizuj zaznaczone raporty ↗'; btn.disabled=false;
+}
+
+function showDiffPreview(a, folderNames){
+  const el=document.getElementById('diff-content');
+  el.innerHTML=`
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Foldery: ${folderNames.map(n=>`<span class="pill pp" style="margin-right:4px">${n}</span>`).join('')}</div>
+    <div class="mgrid4">
+      <div class="mc"><div class="mlbl">Nowe wizyty</div><div class="mval" style="color:var(--green)">+${a.newWizyty.length}</div></div>
+      <div class="mc"><div class="mlbl">Zaktualizowane</div><div class="mval" style="color:#b7650a">~${a.updatedWizyty.length}</div></div>
+      <div class="mc"><div class="mlbl">Bez zmian</div><div class="mval" style="color:var(--text3)">${a.unchangedWizyty}</div></div>
+      <div class="mc"><div class="mlbl">Nowi klienci</div><div class="mval" style="color:var(--green)">+${a.newClients.length}</div></div>
+    </div>
+    ${a.updatedWizyty.length?`<div style="margin-top:1rem"><p class="clabel">Przykłady zmian (pierwsze 5)</p>${a.updatedWizyty.slice(0,5).map(u=>`<div style="font-size:12px;padding:6px 8px;background:var(--bg);border-radius:var(--r);margin-bottom:4px"><strong>${u.new.klient}</strong> · ${u.new.dt_raw} · ${u.old.status}→${u.new.status}, ${u.old.wartosc}zł→${u.new.wartosc}zł</div>`).join('')}</div>`:''}
+    ${a.updatedClients.length?`<p class="clabel" style="margin-top:1rem">Zaktualizowani klienci: ${a.updatedClients.length}</p>`:''}
+  `;
+  document.getElementById('diff-card').style.display='block';
+}
+
+async function confirmMerge(){
+  const statusEl=document.getElementById('drive-status');
+  statusEl.textContent='Zapisuję do bazy...';
+  try{
+    await mergeIntoPersistent();
+    loadPersistentIntoDB();
+    renderFileList(); populateSelectors(); updateAllSections();
+    renderDBCard();
+    document.getElementById('diff-card').style.display='none';
+    selectedWeekIds.clear();
+    renderWeeksList();
+    statusEl.textContent='Zapisano. Baza zaktualizowana.';
+  }catch(e){
+    statusEl.textContent='Błąd zapisu: '+e.message;
+  }
+}
+
+function cancelMerge(){
+  document.getElementById('diff-card').style.display='none';
+  DB={wizyty:[],klienci:[],pracownicy:[],czasPracy:{},raportWizyt:{}};
+  loadedFiles=[];
+  loadPersistentIntoDB();
+  renderFileList(); populateSelectors(); updateAllSections();
+  document.getElementById('drive-status').textContent='Anulowano. Baza bez zmian.';
 }
 // ==================== END GOOGLE DRIVE ====================
 
