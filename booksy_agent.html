@@ -156,6 +156,9 @@
     .gran-tab{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:4px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:inherit;transition:all .1s;}
     .gran-tab:hover{background:var(--bg);}
     .gran-tab.active{background:var(--green);color:white;border-color:var(--green);font-weight:600;}
+    .trainer-pill{background:transparent;border:1px solid var(--border2);color:var(--text3);padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit;transition:all .1s;}
+    .trainer-pill:hover{background:var(--bg);}
+    .trainer-pill.active{background:var(--green-light);color:var(--green);border-color:var(--green);font-weight:500;}
     .period-tab{background:transparent;border:1px solid var(--border2);color:var(--text2);padding:6px 14px;border-radius:var(--r);cursor:pointer;font-size:13px;font-family:inherit;transition:all .1s;}
     .period-tab:hover{background:var(--bg);}
     .period-tab.active{background:var(--green);color:white;border-color:var(--green);font-weight:600;}
@@ -732,7 +735,7 @@ function getCommonData(){
   const pf=document.getElementById('pf')?.value||'';
   const pt=document.getElementById('pt')?.value||'';
   const today=new Date();
-  const cutoff=new Date(today); cutoff.setDate(today.getDate()-14);
+  const cutoff=new Date(today); cutoff.setDate(today.getDate()-30);
 
   const pracMap={};
   z.forEach(r=>{if(!r.pracownik)return;if(!pracMap[r.pracownik])pracMap[r.pracownik]={wizyty:0,wartosc:0,klienci:new Set(),noshows:0};pracMap[r.pracownik].wizyty++;pracMap[r.pracownik].wartosc+=r.wartosc;pracMap[r.pracownik].klienci.add(r.klient);});
@@ -776,7 +779,138 @@ function getCommonData(){
   const noshows=getPreviewFiltered().filter(r=>r.status==='Nieobecność').length;
   const val=z.reduce((s,r)=>s+r.wartosc,0);
 
-  return{z,pracMap,usMap,dni,dniC,hC,aktywni,nowi,aktywniKlienci,nieaktywni,avgDni,avgLTV,avgWizytyKlient,grafPct,noshows,val,total:z.length,maxSlots,workdays};
+  // ======== ANALIZA TRENERÓW: czas aktywności, zmiany trenera, churn ========
+  // Dla każdego trenera zbieramy wizyty z całej bazy (nie tylko filtrowane)
+  const allVisits=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt).sort((a,b)=>a.dt-b.dt);
+
+  // Grupowanie: clientVisits[klient] = [{dt, pracownik}, ...] chronologicznie
+  const clientVisits={};
+  allVisits.forEach(v=>{
+    if(!v.klient||!v.pracownik)return;
+    if(!clientVisits[v.klient])clientVisits[v.klient]=[];
+    clientVisits[v.klient].push({dt:v.dt,pracownik:v.pracownik});
+  });
+
+  // Dla każdego trenera: {firstVisit, lastVisit} per klient
+  const trainerClientSpan={}; // trainerClientSpan[trener][klient] = {first, last, count}
+  Object.entries(clientVisits).forEach(([klient,visits])=>{
+    visits.forEach(v=>{
+      if(!trainerClientSpan[v.pracownik])trainerClientSpan[v.pracownik]={};
+      if(!trainerClientSpan[v.pracownik][klient]){
+        trainerClientSpan[v.pracownik][klient]={first:v.dt,last:v.dt,count:1};
+      }else{
+        const s=trainerClientSpan[v.pracownik][klient];
+        if(v.dt<s.first)s.first=v.dt;
+        if(v.dt>s.last)s.last=v.dt;
+        s.count++;
+      }
+    });
+  });
+
+  // Średni czas aktywności u trenera: tylko klienci z 2+ wizytami, capped at today
+  const trainerAvgActivity={};
+  Object.entries(trainerClientSpan).forEach(([trener,clients])=>{
+    const days=[];
+    Object.values(clients).forEach(s=>{
+      if(s.count<2)return;
+      const effLast=s.last>new Date()?new Date():s.last;
+      const d=Math.round((effLast-s.first)/(1000*60*60*24));
+      if(d>0)days.push(d);
+    });
+    trainerAvgActivity[trener]=days.length?Math.round(days.reduce((a,b)=>a+b,0)/days.length):0;
+  });
+
+  // Zmiany trenera: klient odbył ≥4 wizyty pod rząd u innego trenera
+  // Zliczamy per klient listę "przejść" - dla każdego trenera ile osób od niego "odeszło" w tym okresie
+  const trainerSwitchesOut={}; // trainerSwitchesOut[trener] = liczba klientów którzy od niego przeszli
+  const trainerSwitchesIn={};  // klientów którzy do niego przyszli z innego trenera
+  const periodFrom=pf?new Date(pf):null;
+  const periodTo=pt?new Date(pt):null;
+
+  Object.entries(clientVisits).forEach(([klient,visits])=>{
+    // Przebiegamy chronologicznie, szukamy serii 4+ wizyt u innego niż poprzedni "main"
+    let mainTrainer=null;
+    let runTrainer=null;
+    let runCount=0;
+    visits.forEach(v=>{
+      if(v.pracownik===runTrainer){runCount++;}
+      else{runTrainer=v.pracownik;runCount=1;}
+      // Gdy uzbieramy 4+ pod rząd u runTrainer i jest inny niż mainTrainer -> switch
+      if(runCount>=4&&mainTrainer!==null&&runTrainer!==mainTrainer){
+        // Klient przeszedł od mainTrainer do runTrainer
+        // Data zmiany = data 4. wizyty z serii
+        const switchDate=v.dt;
+        const inPeriod=(!periodFrom||switchDate>=periodFrom)&&(!periodTo||switchDate<=periodTo);
+        if(inPeriod){
+          trainerSwitchesOut[mainTrainer]=(trainerSwitchesOut[mainTrainer]||0)+1;
+          trainerSwitchesIn[runTrainer]=(trainerSwitchesIn[runTrainer]||0)+1;
+        }
+        mainTrainer=runTrainer;
+      }else if(mainTrainer===null&&runCount>=1){
+        // First-ever main trainer = first trainer klient visits
+        mainTrainer=runTrainer;
+      }
+    });
+  });
+
+  // Churn trenera: klient miał ostatnią wizytę u trenera w okresie (pf-pt)
+  // i minęło ≥30 dni od tej wizyty do dziś (a jednocześnie koniec okresu jest ≥30 dni temu)
+  const trainerChurn={};
+  const churnAvailable=(()=>{
+    const endDate=periodTo||new Date();
+    const daysSinceEnd=(new Date()-endDate)/(1000*60*60*24);
+    return daysSinceEnd>=30;
+  })();
+
+  Object.entries(trainerClientSpan).forEach(([trener,clients])=>{
+    if(!churnAvailable){trainerChurn[trener]=null;return;}
+    let odeszli=0,aktywniTrenera=0;
+    Object.entries(clients).forEach(([klient,s])=>{
+      // klient aktywny u trenera w okresie: miał przynajmniej jedną wizytę w okresie
+      const clientVisitsAtTrainer=clientVisits[klient].filter(v=>v.pracownik===trener);
+      const hasVisitInPeriod=clientVisitsAtTrainer.some(v=>(!periodFrom||v.dt>=periodFrom)&&(!periodTo||v.dt<=periodTo));
+      if(!hasVisitInPeriod)return;
+      aktywniTrenera++;
+      // Data ostatniej wizyty u trenera
+      const lastDt=clientVisitsAtTrainer[clientVisitsAtTrainer.length-1].dt;
+      const daysSince=(new Date()-lastDt)/(1000*60*60*24);
+      if(daysSince>=30)odeszli++;
+    });
+    trainerChurn[trener]=aktywniTrenera>0?Math.round(odeszli/aktywniTrenera*100):0;
+  });
+
+  // Churn studia: klient miał ostatnią wizytę w okresie, minęło ≥30 dni
+  let studioChurn=null;
+  if(churnAvailable){
+    let odeszliStudio=0,aktywniStudio=0;
+    Object.entries(clientVisits).forEach(([klient,visits])=>{
+      const hasVisitInPeriod=visits.some(v=>(!periodFrom||v.dt>=periodFrom)&&(!periodTo||v.dt<=periodTo));
+      if(!hasVisitInPeriod)return;
+      aktywniStudio++;
+      const lastDt=visits[visits.length-1].dt;
+      const daysSince=(new Date()-lastDt)/(1000*60*60*24);
+      if(daysSince>=30)odeszliStudio++;
+    });
+    studioChurn=aktywniStudio>0?Math.round(odeszliStudio/aktywniStudio*100):0;
+  }
+
+  // Lista klientów którzy odeszli (dla zakładki Klienci)
+  const odesliClients=[];
+  if(churnAvailable){
+    Object.entries(clientVisits).forEach(([klient,visits])=>{
+      const hasVisitInPeriod=visits.some(v=>(!periodFrom||v.dt>=periodFrom)&&(!periodTo||v.dt<=periodTo));
+      if(!hasVisitInPeriod)return;
+      const lastDt=visits[visits.length-1].dt;
+      const daysSince=(new Date()-lastDt)/(1000*60*60*24);
+      if(daysSince>=30){
+        const klObj=DB.klienci.find(c=>c.name===klient);
+        odesliClients.push({name:klient,lastDt,rez:visits.length,wartosc:klObj?klObj.wartosc:0,daysSince:Math.round(daysSince)});
+      }
+    });
+    odesliClients.sort((a,b)=>b.lastDt-a.lastDt);
+  }
+
+  return{z,pracMap,usMap,dni,dniC,hC,aktywni,nowi,aktywniKlienci,nieaktywni,avgDni,avgLTV,avgWizytyKlient,grafPct,noshows,val,total:z.length,maxSlots,workdays,trainerAvgActivity,trainerSwitchesOut,trainerSwitchesIn,trainerChurn,studioChurn,churnAvailable,odesliClients};
 }
 
 function barRow(label,pct,color,valText){
@@ -795,9 +929,13 @@ function renderPodsumowanie(d){
   </div>
   <div class="mgrid4">
     <div class="mc"><div class="mlbl">Nowi klienci</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
-    <div class="mc"><div class="mlbl">Aktywni klienci</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 14 dni temu</div></div>
-    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">${d.nieaktywni.filter(c=>c.rez>=10).length} do odzyskania</div></div>
+    <div class="mc"><div class="mlbl">Aktywni klienci</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 30 dni temu</div></div>
+    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">bez wizyt ≥ 30 dni</div></div>
+    <div class="mc"><div class="mlbl">Churn studia</div><div class="mval">${d.studioChurn!=null?d.studioChurn+'%':'—'}</div><div class="msub ${d.studioChurn!=null?(d.studioChurn<=10?'good':d.studioChurn<=25?'neutral':'bad'):'neutral'}">${d.studioChurn!=null?'klienci bez wizyty ≥30 dni':'niepełny okres'}</div></div>
+  </div>
+  <div class="mgrid2">
     <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
+    <div class="mc"><div class="mlbl">Śr. LTV klienta</div><div class="mval">${d.avgLTV.toLocaleString('pl')} zł</div><div class="msub neutral">śr. ${d.avgWizytyKlient} wizyt / klient</div></div>
   </div>
   <div class="card">
     <p class="clabel">Obłożenie — dni tygodnia</p>
@@ -828,22 +966,21 @@ function renderPracownicy(d){
   const maxW=list[0]?.[1].wizyty||1;
   const el=document.getElementById('sec-pracownicy');
   if(!list.length){el.innerHTML='<div class="empty">Brak danych pracowników. Wgraj plik lista_wizyt.</div>';return;}
-  el.innerHTML=`<div class="card">
-    <p class="clabel">Trendy — porównanie trenerów</p>
-    <div class="chart-controls">
-      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
-      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
-      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
-    </div>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych</p>
-    <div class="chart-box"><canvas id="chart-trainers-visits"></canvas></div>
-    <p style="font-size:12px;color:var(--text3);margin:16px 0 4px">Wartość zrealizowanych usług</p>
-    <div class="chart-box"><canvas id="chart-trainers-value"></canvas></div>
-  </div>`+list.map(([n,pd])=>{
+
+  // Initialize selected trainers for chart filter if not set
+  const allTrainers=list.map(([n])=>n);
+  if(!window.selectedTrainers)window.selectedTrainers=new Set(allTrainers);
+  // Add any new trainers, remove those no longer present
+  allTrainers.forEach(n=>{if(!window.selectedTrainers.has(n)&&Object.keys(window.selectedTrainers.sizeInit||{}).length===0)window.selectedTrainers.add(n);});
+
+  const cards=list.map(([n,pd])=>{
     const cp=DB.czasPracy[n];
-    const ep=DB.pracownicy.find(p=>p.name===n);
     const pct=Math.round(pd.wizyty/maxW*100);
     const avgV=pd.wizyty?Math.round(pd.wartosc/pd.wizyty):0;
+    const avgAct=d.trainerAvgActivity[n]||0;
+    const switchedOut=d.trainerSwitchesOut[n]||0;
+    const switchedIn=d.trainerSwitchesIn[n]||0;
+    const churn=d.trainerChurn[n];
     return`<div class="card">
       <p class="clabel">${n}</p>
       <div class="mgrid4" style="margin-bottom:.75rem">
@@ -852,10 +989,63 @@ function renderPracownicy(d){
         <div class="mc"><div class="mlbl">Śr. / wizytę</div><div class="mval">${avgV} zł</div></div>
         <div class="mc"><div class="mlbl">Wypełnienie grafiku</div><div class="mval">${cp?cp.pct+'%':'—'}</div><div class="msub ${cp?(cp.pct>=70?'good':cp.pct>=50?'neutral':'bad'):'neutral'}">${cp?(cp.pct>=70?'dobre':cp.pct>=50?'średnie':'niskie'):'brak danych'}</div></div>
       </div>
+      <div class="mgrid4" style="margin-bottom:.75rem">
+        <div class="mc"><div class="mlbl">Śr. czas aktywności klienta</div><div class="mval">${avgAct?Math.round(avgAct/30)+' mies.':'—'}</div><div class="msub neutral">${avgAct?avgAct+' dni':'brak danych'}</div></div>
+        <div class="mc"><div class="mlbl">Klienci którzy odeszli</div><div class="mval">${switchedOut}</div><div class="msub neutral">do innego trenera</div></div>
+        <div class="mc"><div class="mlbl">Klienci którzy przyszli</div><div class="mval">${switchedIn}</div><div class="msub neutral">od innego trenera</div></div>
+        <div class="mc"><div class="mlbl">Churn trenera</div><div class="mval">${churn!=null?churn+'%':'—'}</div><div class="msub ${churn!=null?(churn<=10?'good':churn<=25?'neutral':'bad'):'neutral'}">${churn!=null?'bez wizyty ≥30 dni':'niepełny okres'}</div></div>
+      </div>
       <div class="brow"><span class="blbl">udział w wizytach</span><div class="btrack"><div class="bfill" style="width:${pct}%;background:var(--green)"></div></div><span class="bval">${pd.wizyty} / ${d.total}</span></div>
       <div style="font-size:12px;color:var(--text3);margin-top:6px">Klientów obsłużonych: ${pd.klienci.size} · No-show: ${pd.noshows||0}</div>
     </div>`;
   }).join('');
+
+  // Trainer filter pills for charts
+  const pills=allTrainers.map(n=>{
+    const isOn=window.selectedTrainers.has(n);
+    return`<button class="trainer-pill ${isOn?'active':''}" onclick="toggleTrainerFilter('${n.replace(/'/g,"\\'")}')">${n}</button>`;
+  }).join('');
+
+  const trendsCard=`<div class="card">
+    <p class="clabel">Trendy — porównanie trenerów</p>
+    <div class="chart-controls">
+      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
+      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
+      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin:8px 0 6px">Pokaż trenerów:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">${pills}
+      <button class="btn btn-outline" onclick="selectAllTrainersFilter()" style="font-size:11.5px;padding:4px 10px">Wszyscy</button>
+      <button class="btn btn-outline" onclick="deselectAllTrainersFilter()" style="font-size:11.5px;padding:4px 10px">Nikt</button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych</p>
+    <div class="chart-box"><canvas id="chart-trainers-visits"></canvas></div>
+    <p style="font-size:12px;color:var(--text3);margin:16px 0 4px">Wartość zrealizowanych usług</p>
+    <div class="chart-box"><canvas id="chart-trainers-value"></canvas></div>
+  </div>`;
+
+  el.innerHTML=cards+trendsCard;
+}
+
+function toggleTrainerFilter(name){
+  if(!window.selectedTrainers)window.selectedTrainers=new Set();
+  if(window.selectedTrainers.has(name))window.selectedTrainers.delete(name);
+  else window.selectedTrainers.add(name);
+  document.querySelectorAll('.trainer-pill').forEach(p=>{
+    p.classList.toggle('active',window.selectedTrainers.has(p.textContent));
+  });
+  renderTrendCharts();
+}
+
+function selectAllTrainersFilter(){
+  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone');
+  window.selectedTrainers=new Set([...new Set(zakonczone.map(w=>w.pracownik).filter(Boolean))]);
+  updateAllSections();
+}
+
+function deselectAllTrainersFilter(){
+  window.selectedTrainers=new Set();
+  updateAllSections();
 }
 
 function renderUslugi(d){
@@ -897,8 +1087,8 @@ function renderKlienci(d){
   <div class="mgrid4">
     <div class="mc"><div class="mlbl">Wszyscy klienci</div><div class="mval">${aktywni.length}</div><div class="msub neutral">z co najmniej 1 wizytą</div></div>
     <div class="mc"><div class="mlbl">Nowi klienci</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
-    <div class="mc"><div class="mlbl">Aktywni</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 14 dni temu</div></div>
-    <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">bez wizyt ≥ 14 dni</div></div>
+    <div class="mc"><div class="mlbl">Aktywni</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 30 dni temu</div></div>
+    <div class="mc"><div class="mlbl">Churn studia</div><div class="mval">${d.studioChurn!=null?d.studioChurn+'%':'—'}</div><div class="msub ${d.studioChurn!=null?(d.studioChurn<=10?'good':d.studioChurn<=25?'neutral':'bad'):'neutral'}">${d.studioChurn!=null?d.odesliClients.length+' odeszło':'niepełny okres'}</div></div>
   </div>
   <div class="mgrid2">
     <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
@@ -914,6 +1104,13 @@ function renderKlienci(d){
   <div class="card">
     <p class="clabel">Top 15 klientów wg wartości</p>
     ${sorted.slice(0,15).map(c=>{const p=Math.round(c.wartosc/maxV*100);return barRow(c.name,p,'#8e44ad',`${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak danych.</div>'}
+  </div>
+  <div class="card">
+    <p class="clabel">Klienci którzy odeszli (${d.churnAvailable?d.odesliClients.length:'—'})</p>
+    ${!d.churnAvailable?'<div style="font-size:13px;color:var(--text3);padding:10px 0">Okres kończy się mniej niż 30 dni temu — churn nie jest jeszcze liczony.</div>':(d.odesliClients.length?`<table class="dtable">
+      <thead><tr><th>Imię i nazwisko</th><th>Ostatnia wizyta</th><th style="text-align:right">Dni temu</th><th style="text-align:right">Wizyt</th><th style="text-align:right">Wartość</th></tr></thead>
+      <tbody>${d.odesliClients.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.lastDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.daysSince}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody>
+    </table>`:'<div class="empty">Brak klientów którzy odeszli w tym okresie.</div>')}
   </div>`;
 }
 
@@ -1009,7 +1206,8 @@ function renderTrendCharts(){
   makeChart('chart-new-clients','line',labels,[{label:'Nowi klienci',data:periods.map(p=>newClientsMap[p]),borderColor:'#2980b9',backgroundColor:'rgba(41,128,185,.1)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#2980b9'}]);
 
   // ======== PRACOWNICY: multi-line ========
-  const trainers=[...new Set(zakonczone.map(w=>w.pracownik).filter(Boolean))].sort();
+  const allTrainers=[...new Set(zakonczone.map(w=>w.pracownik).filter(Boolean))].sort();
+  const trainers=window.selectedTrainers?allTrainers.filter(t=>window.selectedTrainers.has(t)):allTrainers;
   // Visits per trainer per period
   const trainerVisits={};trainers.forEach(t=>{trainerVisits[t]={};periods.forEach(p=>trainerVisits[t][p]=0);});
   zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKey(w.dt,trendGranularity);if(trainerVisits[w.pracownik]&&k in trainerVisits[w.pracownik])trainerVisits[w.pracownik][k]++;}});
@@ -1261,7 +1459,7 @@ Dni: ${dniLines}
 Godziny: ${hLines||'brak danych'}
 
 === KLIENCI ===
-Aktywnych: ${aktywni.length} | Nowi: ${nowi} | Aktywni (wizyta ≤14 dni): ${(()=>{const t=new Date();const c=new Date(t);c.setDate(t.getDate()-14);return DB.klienci.filter(k=>k.o_dt&&k.o_dt>=c&&k.rez>0).length;})()}
+Aktywnych: ${aktywni.length} | Nowi: ${nowi} | Aktywni (wizyta ≤30 dni): ${(()=>{const t=new Date();const c=new Date(t);c.setDate(t.getDate()-30);return DB.klienci.filter(k=>k.o_dt&&k.o_dt>=c&&k.rez>0).length;})()}
 Nieaktywni: ${DB.klienci.filter(c=>c.grupy.includes('Nieaktywni')&&c.rez>0).length} | Do odzyskania (≥10 wizyt): ${nieakt}
 Śr. czas aktywności: ${Math.round(avgDni/30)} mies. | Śr. wizyt/klient: ${avgWiz} | Śr. LTV: ${avgLTV.toLocaleString('pl')} zł
 Top 5 klientów: ${topKlienci||'brak danych'}
