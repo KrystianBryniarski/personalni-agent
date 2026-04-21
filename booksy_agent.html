@@ -981,19 +981,28 @@ function renderPracownicy(d){
     const switchedIn=switchedInList.length;
     const churn=d.trainerChurn[n];
     const nId=n.replace(/[^a-zA-Z0-9]/g,'_');
+    const mkt=(key,label,val,sub,subClass)=>`<div class="mc clickable-mc" onclick="togglePracChart('${nId}','${key}')"><div class="mlbl">${label} ▾</div><div class="mval">${val}</div><div class="msub ${subClass||'neutral'}">${sub}</div></div>`;
     return`<div class="card">
       <p class="clabel">${n}</p>
-      <div class="mgrid4" style="margin-bottom:.75rem">
-        <div class="mc"><div class="mlbl">Wizyty</div><div class="mval">${pd.wizyty}</div></div>
-        <div class="mc"><div class="mlbl">Wartość usług</div><div class="mval">${pd.wartosc.toLocaleString('pl')} zł</div></div>
-        <div class="mc"><div class="mlbl">Śr. / wizytę</div><div class="mval">${avgV} zł</div></div>
-        <div class="mc"><div class="mlbl">Wypełnienie grafiku</div><div class="mval">${cp?cp.pct+'%':'—'}</div><div class="msub ${cp?(cp.pct>=70?'good':cp.pct>=50?'neutral':'bad'):'neutral'}">${cp?(cp.pct>=70?'dobre':cp.pct>=50?'średnie':'niskie'):'brak danych'}</div></div>
+      <div id="prac-chart-box-${nId}" style="display:none;margin-bottom:.75rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <p class="clabel" id="prac-chart-title-${nId}" style="margin:0">—</p>
+          <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+        </div>
+        <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-chart-gran-${nId}">—</p>
+        <div class="chart-box"><canvas id="prac-chart-${nId}"></canvas></div>
       </div>
       <div class="mgrid4" style="margin-bottom:.75rem">
-        <div class="mc"><div class="mlbl">Śr. czas aktywności klienta</div><div class="mval">${avgAct?Math.round(avgAct/30)+' mies.':'—'}</div><div class="msub neutral">${avgAct?avgAct+' dni':'brak danych'}</div></div>
+        ${mkt('visits','Wizyty',pd.wizyty,'w okresie','neutral')}
+        ${mkt('value','Wartość usług',pd.wartosc.toLocaleString('pl')+' zł','łącznie','neutral')}
+        ${mkt('avgvisit','Śr. / wizytę',avgV+' zł','średnia','neutral')}
+        ${mkt('occupancy','Wypełnienie grafiku',(cp?cp.pct+'%':'—'),(cp?(cp.pct>=70?'dobre':cp.pct>=50?'średnie':'niskie'):'brak danych'),(cp?(cp.pct>=70?'good':cp.pct>=50?'neutral':'bad'):'neutral'))}
+      </div>
+      <div class="mgrid4" style="margin-bottom:.75rem">
+        ${mkt('avgactivity','Śr. czas aktywności klienta',(avgAct?Math.round(avgAct/30)+' mies.':'—'),(avgAct?avgAct+' dni':'brak danych'),'neutral')}
         <div class="mc clickable-mc" onclick="toggleSwitchList('out-${nId}')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${switchedOut}</div><div class="msub neutral">do innego trenera</div></div>
         <div class="mc clickable-mc" onclick="toggleSwitchList('in-${nId}')"><div class="mlbl">Klienci którzy przyszli ▾</div><div class="mval">${switchedIn}</div><div class="msub neutral">od innego trenera</div></div>
-        <div class="mc"><div class="mlbl">Churn trenera</div><div class="mval">${churn!=null?churn+'%':'—'}</div><div class="msub ${churn!=null?(churn<=10?'good':churn<=25?'neutral':'bad'):'neutral'}">${churn!=null?'bez wizyty ≥30 dni':'niepełny okres'}</div></div>
+        ${mkt('churn','Churn trenera',(churn!=null?churn+'%':'—'),(churn!=null?'bez wizyty ≥30 dni':'niepełny okres'),(churn!=null?(churn<=10?'good':churn<=25?'neutral':'bad'):'neutral'))}
       </div>
       <div id="switch-list-out-${nId}" class="switch-list" style="display:none">
         <p class="clabel">Odeszli do innego trenera</p>
@@ -1022,12 +1031,8 @@ function renderPracownicy(d){
 
   const trendsCard=`<div class="card">
     <p class="clabel">Trendy — porównanie trenerów</p>
-    <div class="chart-controls">
-      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
-      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
-      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
-    </div>
-    <p style="font-size:12px;color:var(--text3);margin:8px 0 6px">Pokaż trenerów:</p>
+    <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px">Granulacja dobrana automatycznie na podstawie wybranego okresu.</p>
+    <p style="font-size:12px;color:var(--text3);margin:4px 0 6px">Pokaż trenerów:</p>
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">${pills}
       <button class="btn btn-outline" onclick="selectAllTrainersFilter()" style="font-size:11.5px;padding:4px 10px">Wszyscy</button>
       <button class="btn btn-outline" onclick="deselectAllTrainersFilter()" style="font-size:11.5px;padding:4px 10px">Nikt</button>
@@ -1075,11 +1080,7 @@ function renderUslugi(d){
   if(!list.length){el.innerHTML='<div class="empty">Brak danych usług. Wgraj plik lista_wizyt.</div>';return;}
   el.innerHTML=`<div class="card">
     <p class="clabel">Trendy — porównanie usług</p>
-    <div class="chart-controls">
-      <button class="gran-tab" data-gran="week" onclick="setTrendGran('week')">Tydzień</button>
-      <button class="gran-tab active" data-gran="month" onclick="setTrendGran('month')">Miesiąc</button>
-      <button class="gran-tab" data-gran="quarter" onclick="setTrendGran('quarter')">Kwartał</button>
-    </div>
+    <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px">Granulacja dobrana automatycznie na podstawie wybranego okresu.</p>
     <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych — per usługa</p>
     <div class="chart-box" style="height:340px"><canvas id="chart-services"></canvas></div>
   </div>`+`<div class="card"><p class="clabel">Popularność usług</p>`+
@@ -1261,6 +1262,132 @@ function closePodsumChart(){
   if(chartInstances['podsum-chart']){chartInstances['podsum-chart'].destroy();delete chartInstances['podsum-chart'];}
 }
 
+function togglePracChart(nId,key){
+  if(!window.activePracChart)window.activePracChart={};
+  if(window.activePracChart[nId]===key){
+    closePracChart(nId);
+    return;
+  }
+  window.activePracChart[nId]=key;
+  document.getElementById('prac-chart-box-'+nId).style.display='block';
+  renderPracChart(nId,key);
+}
+
+function closePracChart(nId){
+  if(window.activePracChart)delete window.activePracChart[nId];
+  const box=document.getElementById('prac-chart-box-'+nId);
+  if(box)box.style.display='none';
+  const cId='prac-chart-'+nId;
+  if(chartInstances[cId]){chartInstances[cId].destroy();delete chartInstances[cId];}
+}
+
+function renderPracChart(nId,key){
+  // Find trainer name from pracMap (need to reverse from nId)
+  const allTrainers=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.pracownik).filter(Boolean))];
+  const trener=allTrainers.find(t=>t.replace(/[^a-zA-Z0-9]/g,'_')===nId);
+  if(!trener)return;
+
+  const gran=getAutoGranularity();
+  const granLabels={day:'dzienna',week:'tygodniowa',month:'miesięczna',quarter:'kwartalna'};
+  const periods=getAutoPeriods(gran);
+  const labels=periods.map(k=>periodLabelExt(k,gran));
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  const from=pf?new Date(pf):new Date('2024-08-01');
+  const to=pt?new Date(pt):new Date();
+  const trainerVisits=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.pracownik===trener&&w.dt&&w.dt>=from&&w.dt<=to);
+
+  const titleMap={
+    visits:'Wizyty — '+trener,
+    value:'Wartość usług — '+trener,
+    avgvisit:'Śr. wartość / wizytę — '+trener,
+    occupancy:'Wypełnienie grafiku — '+trener,
+    avgactivity:'Śr. czas aktywności klienta — '+trener,
+    churn:'Churn trenera — '+trener
+  };
+  document.getElementById('prac-chart-title-'+nId).textContent=titleMap[key]||key;
+  document.getElementById('prac-chart-gran-'+nId).textContent=`Granulacja: ${granLabels[gran]} (dobrana automatycznie)`;
+
+  let data=[],color='#126f43',type='bar',yFormat=null;
+  const initMap=()=>{const m={};periods.forEach(p=>m[p]=0);return m;};
+
+  if(key==='visits'){
+    const m=initMap();
+    trainerVisits.forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]++;});
+    data=periods.map(p=>m[p]);
+    type='bar';color='#126f43';
+  }else if(key==='value'){
+    const m=initMap();
+    trainerVisits.forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]+=w.wartosc;});
+    data=periods.map(p=>Math.round(m[p]));
+    type='line';color='#126f43';yFormat=(v)=>v.toLocaleString('pl')+' zł';
+  }else if(key==='avgvisit'){
+    const countM=initMap(),sumM=initMap();
+    trainerVisits.forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in countM){countM[k]++;sumM[k]+=w.wartosc;}});
+    data=periods.map(p=>countM[p]?Math.round(sumM[p]/countM[p]):0);
+    type='line';color='#8e44ad';yFormat=(v)=>v.toLocaleString('pl')+' zł';
+  }else if(key==='occupancy'){
+    // For occupancy per trainer we don't have grafik per period from Booksy;
+    // use visits / (workdays * 15) as studio-level proxy divided by 4 isn't right per trainer.
+    // Instead show number of visits as proxy (same as 'visits')
+    const m=initMap();
+    trainerVisits.forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]++;});
+    data=periods.map(p=>m[p]);
+    type='bar';color='#2980b9';
+    document.getElementById('prac-chart-title-'+nId).textContent='Liczba wizyt (proxy obłożenia) — '+trener;
+  }else if(key==='avgactivity'){
+    // For each period, compute avg days between first and last visit at this trainer for clients active in period
+    data=periods.map(p=>{
+      // Collect clients who had a visit at this trainer in this period
+      let pFrom,pTo;
+      if(gran==='day'){pFrom=new Date(p);pTo=new Date(p);}
+      else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
+      else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
+      else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
+      const clientsInPeriod=new Set();
+      trainerVisits.forEach(w=>{if(w.dt>=pFrom&&w.dt<=pTo&&w.klient)clientsInPeriod.add(w.klient);});
+      const days=[];
+      clientsInPeriod.forEach(klient=>{
+        const v=DB.wizyty.filter(x=>x.status==='Zakończone'&&x.klient===klient&&x.pracownik===trener&&x.dt).sort((a,b)=>a.dt-b.dt);
+        if(v.length<2)return;
+        const effLast=v[v.length-1].dt>new Date()?new Date():v[v.length-1].dt;
+        const d=Math.round((effLast-v[0].dt)/(1000*60*60*24));
+        if(d>0)days.push(d);
+      });
+      return days.length?Math.round(days.reduce((a,b)=>a+b,0)/days.length):0;
+    });
+    type='line';color='#d35400';yFormat=(v)=>v+' dni';
+  }else if(key==='churn'){
+    data=periods.map(p=>{
+      let pFrom,pTo;
+      if(gran==='day'){pFrom=new Date(p);pTo=new Date(p);}
+      else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
+      else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
+      else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
+      const now=new Date();
+      if((now-pTo)/(1000*60*60*24)<30)return null;
+      const clientsActive=new Set();
+      trainerVisits.forEach(w=>{if(w.dt>=pFrom&&w.dt<=pTo&&w.klient)clientsActive.add(w.klient);});
+      let active=0,churned=0;
+      clientsActive.forEach(klient=>{
+        active++;
+        const v=DB.wizyty.filter(x=>x.status==='Zakończone'&&x.klient===klient&&x.pracownik===trener&&x.dt);
+        const lastV=v.reduce((mx,x)=>x.dt>mx?x.dt:mx,new Date(0));
+        if((now-lastV)/(1000*60*60*24)>=30)churned++;
+      });
+      return active>0?Math.round(churned/active*100):0;
+    });
+    type='line';color='#c0392b';yFormat=(v)=>v==null?'—':v+'%';
+  }
+
+  const dataset={
+    label:titleMap[key]||key,
+    data,
+    ...(type==='line'?{borderColor:color,backgroundColor:color+'22',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:color}:{backgroundColor:color,borderRadius:4})
+  };
+  makeChart('prac-chart-'+nId,type,labels,[dataset],yFormat);
+}
+
 function renderPodsumChart(key){
   const gran=getAutoGranularity();
   const granLabels={day:'dzienna',week:'tygodniowa',month:'miesięczna',quarter:'kwartalna'};
@@ -1282,7 +1409,7 @@ function renderPodsumChart(key){
     inactive:'Nieaktywni (nie mieli wizyty w okresie, byli wcześniej)',
     churn:'Churn studia',
     avgActivity:'Liczba wizyt (proxy aktywności)',
-    ltv:'Wartość klientów (kumulatywnie)'
+    ltv:'Śr. LTV klienta w okresie'
   };
   document.getElementById('podsum-chart-title').textContent=titleMap[key]||key;
   document.getElementById('podsum-chart-gran').textContent=`Granulacja: ${granLabels[gran]} (dobrana automatycznie na podstawie wybranego okresu)`;
@@ -1377,10 +1504,19 @@ function renderPodsumChart(key){
     data=periods.map(p=>m[p]);
     type='bar';color='#8e44ad';
   }else if(key==='ltv'){
-    // Cumulative value
-    const m=initMap();
-    zakonczone.forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]+=w.wartosc;});
-    let cum=0;data=periods.map(p=>{cum+=m[p];return Math.round(cum);});
+    // Śr. LTV klienta w danym okresie = suma wartości / liczba unikalnych klientów w okresie
+    data=periods.map(p=>{
+      const valSum={}; const clients=new Set();
+      zakonczone.forEach(w=>{if(periodKeyExt(w.dt,gran)===p&&w.klient){clients.add(w.klient);}});
+      if(clients.size===0)return 0;
+      // LTV = total value per client in this period
+      let total=0;
+      clients.forEach(klient=>{
+        const v=zakonczone.filter(w=>w.klient===klient&&periodKeyExt(w.dt,gran)===p).reduce((s,w)=>s+w.wartosc,0);
+        total+=v;
+      });
+      return Math.round(total/clients.size);
+    });
     type='line';color='#d35400';yFormat=(v)=>v.toLocaleString('pl')+' zł';
   }
 
@@ -1393,26 +1529,29 @@ function renderPodsumChart(key){
 }
 
 function renderTrendCharts(){
-  const periods=getSortedPeriods(trendGranularity);
-  const labels=periods.map(k=>periodLabel(k,trendGranularity));
-  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone');
-  // Note: Podsumowanie chart-visits/value/new-clients removed - handled via togglePodsumChart
+  const gran=getAutoGranularity();
+  const periods=getAutoPeriods(gran);
+  const labels=periods.map(k=>periodLabelExt(k,gran));
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  const from=pf?new Date(pf):new Date('2024-08-01');
+  const to=pt?new Date(pt):new Date();
+  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt&&w.dt>=from&&w.dt<=to);
 
   // ======== PRACOWNICY: multi-line ========
-  const allTrainers=[...new Set(zakonczone.map(w=>w.pracownik).filter(Boolean))].sort();
+  const allTrainers=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.pracownik).filter(Boolean))].sort();
   const trainers=window.selectedTrainers?allTrainers.filter(t=>window.selectedTrainers.has(t)):allTrainers;
-  // Visits per trainer per period
+
   const trainerVisits={};trainers.forEach(t=>{trainerVisits[t]={};periods.forEach(p=>trainerVisits[t][p]=0);});
-  zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKey(w.dt,trendGranularity);if(trainerVisits[w.pracownik]&&k in trainerVisits[w.pracownik])trainerVisits[w.pracownik][k]++;}});
+  zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKeyExt(w.dt,gran);if(trainerVisits[w.pracownik]&&k in trainerVisits[w.pracownik])trainerVisits[w.pracownik][k]++;}});
   makeChart('chart-trainers-visits','line',labels,trainers.map((t,i)=>({
     label:t,data:periods.map(p=>trainerVisits[t][p]),
     borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
     fill:false,tension:.3,pointRadius:3
   })));
 
-  // Value per trainer per period
   const trainerValue={};trainers.forEach(t=>{trainerValue[t]={};periods.forEach(p=>trainerValue[t][p]=0);});
-  zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKey(w.dt,trendGranularity);if(trainerValue[w.pracownik]&&k in trainerValue[w.pracownik])trainerValue[w.pracownik][k]+=w.wartosc;}});
+  zakonczone.forEach(w=>{if(w.dt&&w.pracownik){const k=periodKeyExt(w.dt,gran);if(trainerValue[w.pracownik]&&k in trainerValue[w.pracownik])trainerValue[w.pracownik][k]+=w.wartosc;}});
   makeChart('chart-trainers-value','line',labels,trainers.map((t,i)=>({
     label:t,data:periods.map(p=>Math.round(trainerValue[t][p])),
     borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
@@ -1420,14 +1559,19 @@ function renderTrendCharts(){
   })),(v)=>v.toLocaleString('pl')+' zł');
 
   // ======== USŁUGI: multi-line ========
-  const services=[...new Set(zakonczone.map(w=>w.usluga).filter(Boolean))].sort();
+  const services=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.usluga).filter(Boolean))].sort();
   const serviceVisits={};services.forEach(s=>{serviceVisits[s]={};periods.forEach(p=>serviceVisits[s][p]=0);});
-  zakonczone.forEach(w=>{if(w.dt&&w.usluga){const k=periodKey(w.dt,trendGranularity);if(serviceVisits[w.usluga]&&k in serviceVisits[w.usluga])serviceVisits[w.usluga][k]++;}});
+  zakonczone.forEach(w=>{if(w.dt&&w.usluga){const k=periodKeyExt(w.dt,gran);if(serviceVisits[w.usluga]&&k in serviceVisits[w.usluga])serviceVisits[w.usluga][k]++;}});
   makeChart('chart-services','line',labels,services.map((s,i)=>({
     label:s,data:periods.map(p=>serviceVisits[s][p]),
     borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
     fill:false,tension:.3,pointRadius:3
   })));
+
+  // Re-render any open per-trainer charts
+  if(window.activePracChart){
+    Object.entries(window.activePracChart).forEach(([nId,key])=>{renderPracChart(nId,key);});
+  }
 }
 
 
