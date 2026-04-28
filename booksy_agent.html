@@ -853,8 +853,8 @@ function getCommonData(){
     });
   });
 
-  // Klienci którzy odeszli — per trener: aktywni u trenera w okresie, ostatnia wizyta u tego trenera ≥30 dni temu
-  const trainerOdeszli={}; // trainer -> [{name, lastDt, daysSince, rez, wartosc}]
+  // Klienci którzy odeszli — per trener: byli u trenera w okresie ORAZ odeszli ZE STUDIA (ostatnia wizyta gdziekolwiek ≥30 dni temu)
+  const trainerOdeszli={};
   const now=new Date();
   Object.entries(trainerClientSpan).forEach(([trener,clients])=>{
     trainerOdeszli[trener]=[];
@@ -862,14 +862,16 @@ function getCommonData(){
       const clientVisitsAtTrainer=clientVisits[klient].filter(v=>v.pracownik===trener);
       const hasVisitInPeriod=clientVisitsAtTrainer.some(v=>(!periodFrom||v.dt>=periodFrom)&&(!periodTo||v.dt<=periodTo));
       if(!hasVisitInPeriod)return;
-      const lastDt=clientVisitsAtTrainer[clientVisitsAtTrainer.length-1].dt;
-      const daysSince=Math.round((now-lastDt)/(1000*60*60*24));
+      // Last visit anywhere in studio (not just at this trainer)
+      const lastVisitAnywhere=clientVisits[klient][clientVisits[klient].length-1].dt;
+      const daysSince=Math.round((now-lastVisitAnywhere)/(1000*60*60*24));
       if(daysSince>=30){
         const klObj=DB.klienci.find(c=>c.name===klient);
-        trainerOdeszli[trener].push({name:klient,lastDt,daysSince,rez:clientVisitsAtTrainer.length,wartosc:klObj?klObj.wartosc:0});
+        const lastAtTrainer=clientVisitsAtTrainer[clientVisitsAtTrainer.length-1].dt;
+        trainerOdeszli[trener].push({name:klient,lastDt:lastAtTrainer,lastStudioDt:lastVisitAnywhere,daysSince,rez:clientVisitsAtTrainer.length,wartosc:klObj?klObj.wartosc:0});
       }
     });
-    trainerOdeszli[trener].sort((a,b)=>b.lastDt-a.lastDt);
+    trainerOdeszli[trener].sort((a,b)=>b.lastStudioDt-a.lastStudioDt);
   });
 
   // Klienci którzy odeszli — studio: aktywni w studiu w okresie, ostatnia wizyta ≥30 dni temu
@@ -1463,7 +1465,7 @@ function togglePracInline(nId,key){
       </div>
       <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-chart-gran-${nId}">—</p>
       <div class="chart-box" style="margin-bottom:1rem"><canvas id="prac-chart-${nId}"></canvas></div>
-      ${list.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Ostatnia wizyta</th><th style="text-align:right">Dni temu</th><th style="text-align:right">Wizyt</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.lastDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.daysSince}</td><td style="text-align:right">${c.rez}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>'}`;
+      ${list.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Ostatnia wizyta u trenera</th><th>Ostatnia wizyta w studiu</th><th style="text-align:right">Dni temu</th><th style="text-align:right">Wizyt u trenera</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.lastDt.toLocaleDateString('pl')}</td><td style="color:var(--text3)">${(c.lastStudioDt||c.lastDt).toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.daysSince}</td><td style="text-align:right">${c.rez}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak. Wszyscy klienci którzy byli u tego trenera nadal trenują w studiu.</div>'}`;
     box.style.display='block';
     renderPracChart(nId,key);
   }else if(key==='returning'){
@@ -1566,12 +1568,19 @@ function renderPracChart(nId,key){
       else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
       else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
       else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
-      // Last visit ever at this trainer for each client
-      const lastVisitAt={};
-      DB.wizyty.filter(x=>x.status==='Zakończone'&&x.pracownik===trener&&x.dt).forEach(w=>{if(!lastVisitAt[w.klient]||w.dt>lastVisitAt[w.klient])lastVisitAt[w.klient]=w.dt;});
+      // Find clients who were at this trainer in this period, AND their last visit ANYWHERE was in this period AND ≥30 days ago
+      const allVisits=DB.wizyty.filter(x=>x.status==='Zakończone'&&x.dt);
+      // Group by client
+      const byClient={};
+      allVisits.forEach(w=>{if(!byClient[w.klient])byClient[w.klient]=[];byClient[w.klient].push(w);});
       let count=0;
-      Object.entries(lastVisitAt).forEach(([klient,lastDt])=>{
-        if(lastDt>=pFrom&&lastDt<=pTo&&(now-lastDt)/(1000*60*60*24)>=30)count++;
+      Object.entries(byClient).forEach(([klient,visits])=>{
+        // Was at this trainer in this period?
+        const atTrainerInP=visits.some(v=>v.pracownik===trener&&v.dt>=pFrom&&v.dt<=pTo);
+        if(!atTrainerInP)return;
+        // Last visit anywhere
+        const lastVisit=visits.reduce((m,v)=>v.dt>m?v.dt:m,new Date(0));
+        if(lastVisit>=pFrom&&lastVisit<=pTo&&(now-lastVisit)/(1000*60*60*24)>=30)count++;
       });
       return count;
     });
