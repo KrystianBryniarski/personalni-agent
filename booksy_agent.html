@@ -853,7 +853,8 @@ function getCommonData(){
     });
   });
 
-  // Klienci którzy odeszli — per trener: byli u trenera w okresie ORAZ odeszli ZE STUDIA (ostatnia wizyta gdziekolwiek ≥30 dni temu)
+  // Klienci którzy odeszli — per trener: byli u trenera w okresie ORAZ odeszli ZE STUDIA W TYM OKRESIE
+  // (ostatnia wizyta w studiu mieści się w wybranym okresie i minęło od niej ≥30 dni)
   const trainerOdeszli={};
   const now=new Date();
   Object.entries(trainerClientSpan).forEach(([trener,clients])=>{
@@ -862,8 +863,10 @@ function getCommonData(){
       const clientVisitsAtTrainer=clientVisits[klient].filter(v=>v.pracownik===trener);
       const hasVisitInPeriod=clientVisitsAtTrainer.some(v=>(!periodFrom||v.dt>=periodFrom)&&(!periodTo||v.dt<=periodTo));
       if(!hasVisitInPeriod)return;
-      // Last visit anywhere in studio (not just at this trainer)
       const lastVisitAnywhere=clientVisits[klient][clientVisits[klient].length-1].dt;
+      // Last studio visit must be inside the selected period
+      if(periodFrom&&lastVisitAnywhere<periodFrom)return;
+      if(periodTo&&lastVisitAnywhere>periodTo)return;
       const daysSince=Math.round((now-lastVisitAnywhere)/(1000*60*60*24));
       if(daysSince>=30){
         const klObj=DB.klienci.find(c=>c.name===klient);
@@ -874,12 +877,12 @@ function getCommonData(){
     trainerOdeszli[trener].sort((a,b)=>b.lastStudioDt-a.lastStudioDt);
   });
 
-  // Klienci którzy odeszli — studio: aktywni w studiu w okresie, ostatnia wizyta ≥30 dni temu
+  // Klienci którzy odeszli — studio: ostatnia wizyta MIEŚCI SIĘ w wybranym okresie i minęło ≥30 dni
   const studioOdeszli=[];
   Object.entries(clientVisits).forEach(([klient,visits])=>{
-    const hasVisitInPeriod=visits.some(v=>(!periodFrom||v.dt>=periodFrom)&&(!periodTo||v.dt<=periodTo));
-    if(!hasVisitInPeriod)return;
     const lastDt=visits[visits.length-1].dt;
+    if(periodFrom&&lastDt<periodFrom)return;
+    if(periodTo&&lastDt>periodTo)return;
     const daysSince=Math.round((now-lastDt)/(1000*60*60*24));
     if(daysSince>=30){
       const klObj=DB.klienci.find(c=>c.name===klient);
