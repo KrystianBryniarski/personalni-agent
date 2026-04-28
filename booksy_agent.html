@@ -975,6 +975,7 @@ function renderPodsumowanie(d){
 }
 
 function renderPracownicy(d){
+  window.pracDataCache=d;
   const list=Object.entries(d.pracMap).sort((a,b)=>b[1].wizyty-a[1].wizyty);
   const maxW=list[0]?.[1].wizyty||1;
   const el=document.getElementById('sec-pracownicy');
@@ -999,46 +1000,28 @@ function renderPracownicy(d){
     const returningList=d.trainerReturning[n]||[];
     const nId=n.replace(/[^a-zA-Z0-9]/g,'_');
     const mkt=(key,label,val,sub,subClass)=>`<div class="mc clickable-mc" onclick="togglePracChart('${nId}','${key}')"><div class="mlbl">${label} ▾</div><div class="mval">${val}</div><div class="msub ${subClass||'neutral'}">${sub}</div></div>`;
+    const switchTable=(arr,roleHeader,emptyMsg)=>arr.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Data zmiany</th><th>${roleHeader}</th></tr></thead><tbody>${arr.sort((a,b)=>b.data-a.data).map(s=>`<tr><td>${s.klient}</td><td style="color:var(--text3)">${s.data.toLocaleDateString('pl')}</td><td>${s.drugiTrener}</td></tr>`).join('')}</tbody></table>`:`<div class="empty">${emptyMsg}</div>`;
     return`<div class="card">
       <p class="clabel">${n}</p>
-      <div id="prac-chart-box-${nId}" style="display:none;margin-bottom:.75rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <p class="clabel" id="prac-chart-title-${nId}" style="margin:0">—</p>
-          <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
-        </div>
-        <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-chart-gran-${nId}">—</p>
-        <div class="chart-box"><canvas id="prac-chart-${nId}"></canvas></div>
-      </div>
-      <div class="mgrid4" style="margin-bottom:.75rem">
+      <div class="mgrid4" style="margin-bottom:.5rem">
         ${mkt('visits','Wizyty',pd.wizyty,'w okresie','neutral')}
         ${mkt('value','Wartość usług',pd.wartosc.toLocaleString('pl')+' zł','łącznie','neutral')}
         ${mkt('avgvisit','Śr. / wizytę',avgV+' zł','średnia','neutral')}
         ${mkt('occupancy','Wypełnienie grafiku',(cp?cp.pct+'%':'—'),(cp?(cp.pct>=70?'dobre':cp.pct>=50?'średnie':'niskie'):'brak danych'),(cp?(cp.pct>=70?'good':cp.pct>=50?'neutral':'bad'):'neutral'))}
       </div>
-      <div class="mgrid4" style="margin-bottom:.75rem">
+      <div id="prac-expand-row1-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
+      <div class="mgrid4" style="margin-bottom:.5rem">
         ${mkt('avgactivity','Śr. czas aktywności klienta',(avgAct?Math.round(avgAct/30)+' mies.':'—'),(avgAct?avgAct+' dni':'brak danych'),'neutral')}
-        <div class="mc clickable-mc" onclick="toggleSwitchList('out-${nId}')"><div class="mlbl">Odeszli do innego trenera ▾</div><div class="mval">${switchedOut}</div><div class="msub neutral">w studiu</div></div>
-        <div class="mc clickable-mc" onclick="toggleSwitchList('in-${nId}')"><div class="mlbl">Przyszli od innego trenera ▾</div><div class="mval">${switchedIn}</div><div class="msub neutral">w studiu</div></div>
-        ${mkt('lost','Klienci którzy odeszli',odeszliList.length,'ostatnia wizyta ≥30 dni temu','bad')}
+        <div class="mc clickable-mc" onclick="togglePracInline('${nId}','switchOut')"><div class="mlbl">Odeszli do innego trenera ▾</div><div class="mval">${switchedOut}</div><div class="msub neutral">w studiu</div></div>
+        <div class="mc clickable-mc" onclick="togglePracInline('${nId}','switchIn')"><div class="mlbl">Przyszli od innego trenera ▾</div><div class="mval">${switchedIn}</div><div class="msub neutral">w studiu</div></div>
+        <div class="mc clickable-mc" onclick="togglePracInline('${nId}','lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${odeszliList.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
       </div>
-      <div class="mgrid2" style="margin-bottom:.75rem">
-        ${mkt('returning','Powracający klienci',returningList.length,'po ≥30 dniach przerwy','good')}
+      <div id="prac-expand-row2-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
+      <div class="mgrid2" style="margin-bottom:.5rem">
+        <div class="mc clickable-mc" onclick="togglePracInline('${nId}','returning')"><div class="mlbl">Powracający klienci ▾</div><div class="mval">${returningList.length}</div><div class="msub good">po ≥30 dniach przerwy</div></div>
         <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(returningList.length-odeszliList.length)>=0?'var(--green)':'#c0392b'}">${(returningList.length-odeszliList.length)>=0?'+':''}${returningList.length-odeszliList.length}</div><div class="msub neutral">Powr. - Odeszli</div></div>
       </div>
-      <div id="switch-list-out-${nId}" class="switch-list" style="display:none">
-        <p class="clabel">Odeszli do innego trenera</p>
-        ${switchedOutList.length?`<table class="dtable">
-          <thead><tr><th>Klient</th><th>Data zmiany</th><th>Nowy trener</th></tr></thead>
-          <tbody>${switchedOutList.sort((a,b)=>b.data-a.data).map(s=>`<tr><td>${s.klient}</td><td style="color:var(--text3)">${s.data.toLocaleDateString('pl')}</td><td>${s.drugiTrener}</td></tr>`).join('')}</tbody>
-        </table>`:'<div class="empty">Brak zmian w tym okresie.</div>'}
-      </div>
-      <div id="switch-list-in-${nId}" class="switch-list" style="display:none">
-        <p class="clabel">Przyszli od innego trenera</p>
-        ${switchedInList.length?`<table class="dtable">
-          <thead><tr><th>Klient</th><th>Data zmiany</th><th>Poprzedni trener</th></tr></thead>
-          <tbody>${switchedInList.sort((a,b)=>b.data-a.data).map(s=>`<tr><td>${s.klient}</td><td style="color:var(--text3)">${s.data.toLocaleDateString('pl')}</td><td>${s.drugiTrener}</td></tr>`).join('')}</tbody>
-        </table>`:'<div class="empty">Brak zmian w tym okresie.</div>'}
-      </div>
+      <div id="prac-expand-row3-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
       <div class="brow"><span class="blbl">udział w wizytach</span><div class="btrack"><div class="bfill" style="width:${pct}%;background:var(--green)"></div></div><span class="bval">${pd.wizyty} / ${d.total}</span></div>
       <div style="font-size:12px;color:var(--text3);margin-top:6px">Klientów obsłużonych: ${pd.klienci.size} · No-show: ${pd.noshows||0}</div>
     </div>`;
@@ -1067,19 +1050,103 @@ function renderPracownicy(d){
   el.innerHTML=cards+trendsCard;
 }
 
-function toggleKlienciList(key){
-  ['all','new','returning','lost'].forEach(k=>{
-    const el=document.getElementById('klienci-list-'+k);
-    if(!el)return;
-    if(k===key){el.style.display=el.style.display==='none'?'block':'none';}
-    else{el.style.display='none';}
-  });
+function toggleKlienciExpand(key){
+  if(window.activeKlienciExpand===key){
+    closeKlienciExpand();
+    return;
+  }
+  window.activeKlienciExpand=key;
+  document.getElementById('klienci-expand').style.display='block';
+  renderKlienciExpand(key);
 }
 
-function toggleSwitchList(id){
-  const el=document.getElementById('switch-list-'+id);
-  if(!el)return;
-  el.style.display=el.style.display==='none'?'block':'none';
+function closeKlienciExpand(){
+  window.activeKlienciExpand=null;
+  document.getElementById('klienci-expand').style.display='none';
+  if(chartInstances['klienci-expand-chart']){chartInstances['klienci-expand-chart'].destroy();delete chartInstances['klienci-expand-chart'];}
+}
+
+function renderKlienciExpand(key){
+  const data=window.klienciExpandData;if(!data)return;
+  const titles={all:'Wszyscy klienci',new:'Nowi klienci',returning:'Powracający klienci',lost:'Klienci którzy odeszli'};
+  const gran=getAutoGranularity();
+  const granLabels={day:'dzienna',week:'tygodniowa',month:'miesięczna',quarter:'kwartalna'};
+  document.getElementById('klienci-expand-title').textContent=titles[key];
+  document.getElementById('klienci-expand-gran').textContent=`Granulacja wykresu: ${granLabels[gran]} (dobrana automatycznie)`;
+  // Render chart
+  const periods=getAutoPeriods(gran);
+  const labels=periods.map(k=>periodLabelExt(k,gran));
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  const from=pf?new Date(pf):new Date('2024-08-01');
+  const to=pt?new Date(pt):new Date();
+  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt&&w.dt>=from&&w.dt<=to);
+  let chartData=[],color='#8e44ad',type='bar',yFormat=null;
+  const initMap=()=>{const m={};periods.forEach(p=>m[p]=0);return m;};
+  if(key==='all'){
+    chartData=periods.map(p=>{
+      const cs=new Set();
+      zakonczone.forEach(w=>{if(periodKeyExt(w.dt,gran)===p&&w.klient)cs.add(w.klient);});
+      return cs.size;
+    });
+    color='#27ae60';type='line';
+  }else if(key==='new'){
+    const m=initMap();
+    DB.klienci.forEach(c=>{if(c.p_dt&&c.rez>0&&c.p_dt>=from&&c.p_dt<=to){const k=periodKeyExt(c.p_dt,gran);if(k in m)m[k]++;}});
+    chartData=periods.map(p=>m[p]);
+    color='#2980b9';type='bar';
+  }else if(key==='returning'){
+    chartData=periods.map(p=>{
+      let pFrom,pTo;
+      if(gran==='day'){pFrom=new Date(p);pTo=new Date(p);}
+      else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
+      else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
+      else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
+      const cv={};
+      zakonczone.forEach(w=>{if(w.klient&&w.dt){if(!cv[w.klient])cv[w.klient]=[];cv[w.klient].push(w.dt);}});
+      let count=0;
+      Object.entries(cv).forEach(([klient,dates])=>{
+        dates.sort((a,b)=>a-b);
+        const firstInP=dates.find(d=>d>=pFrom&&d<=pTo);
+        if(!firstInP)return;
+        const before=dates.filter(d=>d<firstInP);
+        if(!before.length)return;
+        const lastBefore=before[before.length-1];
+        if((firstInP-lastBefore)/(1000*60*60*24)>=30)count++;
+      });
+      return count;
+    });
+    color='#27ae60';type='bar';
+  }else if(key==='lost'){
+    const now=new Date();
+    chartData=periods.map(p=>{
+      let pFrom,pTo;
+      if(gran==='day'){pFrom=new Date(p);pTo=new Date(p);}
+      else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
+      else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
+      else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
+      const lvm={};
+      zakonczone.forEach(w=>{if(w.klient&&w.dt&&(!lvm[w.klient]||w.dt>lvm[w.klient]))lvm[w.klient]=w.dt;});
+      let count=0;
+      Object.entries(lvm).forEach(([klient,lastDt])=>{if(lastDt>=pFrom&&lastDt<=pTo&&(now-lastDt)/(1000*60*60*24)>=30)count++;});
+      return count;
+    });
+    color='#c0392b';type='bar';
+  }
+  const dataset={label:titles[key],data:chartData,...(type==='line'?{borderColor:color,backgroundColor:color+'22',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:color}:{backgroundColor:color,borderRadius:4})};
+  makeChart('klienci-expand-chart',type,labels,[dataset],yFormat);
+
+  // Render list
+  const listEl=document.getElementById('klienci-expand-list');
+  if(key==='all'){
+    listEl.innerHTML=data.aktywni.length?`<table class="dtable"><thead><tr><th>Imię i nazwisko</th><th>Ostatnia wizyta</th><th style="text-align:right">Wizyt</th><th style="text-align:right">Wartość</th></tr></thead><tbody>${data.aktywni.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.o_dt?c.o_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak klientów.</div>';
+  }else if(key==='new'){
+    listEl.innerHTML=data.nowi.length?`<table class="dtable"><thead><tr><th>Imię i nazwisko</th><th>Pierwsza wizyta</th><th style="text-align:right">Rezerwacji</th><th style="text-align:right">Wartość</th></tr></thead><tbody>${data.nowi.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.p_dt?c.p_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>';
+  }else if(key==='returning'){
+    listEl.innerHTML=data.returning.length?`<table class="dtable"><thead><tr><th>Imię i nazwisko</th><th>Powrót</th><th style="text-align:right">Przerwa</th><th style="text-align:right">Wszystkich wizyt</th><th style="text-align:right">Wartość</th></tr></thead><tbody>${data.returning.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.returnDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.gap} dni</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>';
+  }else if(key==='lost'){
+    listEl.innerHTML=data.lost.length?`<table class="dtable"><thead><tr><th>Imię i nazwisko</th><th>Ostatnia wizyta</th><th style="text-align:right">Dni temu</th><th style="text-align:right">Wizyt</th><th style="text-align:right">Wartość</th></tr></thead><tbody>${data.lost.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.lastDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.daysSince}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>';
+  }
 }
 
 function toggleTrainerFilter(name){
@@ -1132,48 +1199,40 @@ function renderKlienci(d){
   const aktywni=d.aktywni;
   const sorted=aktywni.filter(c=>c.wartosc>0).sort((a,b)=>b.wartosc-a.wartosc);
   const maxV=sorted[0]?.wartosc||1;
-  // New clients list sorted by first visit date (most recent first)
   const noviSorted=[...d.nowi].sort((a,b)=>(b.p_dt||0)-(a.p_dt||0));
+  const allSorted=[...aktywni].sort((a,b)=>(b.o_dt||0)-(a.o_dt||0));
+
+  // Each kafelka is in its own grid cell that can grow vertically when expanded
+  // CSS uses grid auto-fit; expand div is positioned BELOW the kafelka but takes full row width
+  // Trick: use a separate row for expand area that aligns under the kafelka
+  // Simpler approach: kafelka + below-it expand wrapper, all 4 in 4-col layout means click toggles a row break
+
+  // Strategy: render kafelki in flex/grid 4-col, AFTER each row of 4, render hidden expand divs (col-span 4)
+  // Single row → expand directly under the row (close to the kafelka)
+
   el.innerHTML=`
   <div class="mgrid4">
-    <div class="mc clickable-mc" onclick="toggleKlienciList('all')"><div class="mlbl">Wszyscy klienci ▾</div><div class="mval">${aktywni.length}</div><div class="msub neutral">z co najmniej 1 wizytą</div></div>
-    <div class="mc clickable-mc" onclick="toggleKlienciList('new')"><div class="mlbl">Nowi klienci ▾</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
-    <div class="mc clickable-mc" onclick="toggleKlienciList('returning')"><div class="mlbl">Powracający ▾</div><div class="mval">${d.studioReturning.length}</div><div class="msub good">po ≥30 dniach przerwy</div></div>
-    <div class="mc clickable-mc" onclick="toggleKlienciList('lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${d.studioOdeszli.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
+    <div class="mc clickable-mc" onclick="toggleKlienciExpand('all')"><div class="mlbl">Wszyscy klienci ▾</div><div class="mval">${aktywni.length}</div><div class="msub neutral">z co najmniej 1 wizytą</div></div>
+    <div class="mc clickable-mc" onclick="toggleKlienciExpand('new')"><div class="mlbl">Nowi klienci ▾</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
+    <div class="mc clickable-mc" onclick="toggleKlienciExpand('returning')"><div class="mlbl">Powracający ▾</div><div class="mval">${d.studioReturning.length}</div><div class="msub good">po ≥30 dniach przerwy</div></div>
+    <div class="mc clickable-mc" onclick="toggleKlienciExpand('lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${d.studioOdeszli.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
+  </div>
+  <div id="klienci-expand" style="display:none;margin-top:1rem">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <p class="clabel" id="klienci-expand-title" style="margin:0">—</p>
+        <button onclick="closeKlienciExpand()" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="klienci-expand-gran">—</p>
+      <div class="chart-box" style="margin-bottom:1rem"><canvas id="klienci-expand-chart"></canvas></div>
+      <div id="klienci-expand-list"></div>
+    </div>
   </div>
   <div class="mgrid4">
     <div class="mc"><div class="mlbl">Aktywni</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 30 dni temu</div></div>
     <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">bez wizyt ≥ 30 dni</div></div>
     <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'var(--green)':'#c0392b'}">${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'+':''}${d.nowi.length+d.studioReturning.length-d.studioOdeszli.length}</div><div class="msub neutral">Nowi+Powr.-Odeszli</div></div>
     <div class="mc"><div class="mlbl">Śr. LTV klienta</div><div class="mval">${d.avgLTV.toLocaleString('pl')} zł</div><div class="msub neutral">${d.avgWizytyKlient} wizyt / klient</div></div>
-  </div>
-  <div id="klienci-list-all" class="card" style="display:none">
-    <p class="clabel">Wszyscy klienci (${aktywni.length})</p>
-    ${aktywni.length?`<table class="dtable">
-      <thead><tr><th>Imię i nazwisko</th><th>Ostatnia wizyta</th><th style="text-align:right">Wizyt</th><th style="text-align:right">Wartość</th></tr></thead>
-      <tbody>${[...aktywni].sort((a,b)=>(b.o_dt||0)-(a.o_dt||0)).map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.o_dt?c.o_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody>
-    </table>`:'<div class="empty">Brak klientów.</div>'}
-  </div>
-  <div id="klienci-list-new" class="card" style="display:none">
-    <p class="clabel">Nowi klienci w wybranym okresie (${d.nowi.length})</p>
-    ${noviSorted.length?`<table class="dtable">
-      <thead><tr><th>Imię i nazwisko</th><th>Pierwsza wizyta</th><th style="text-align:right">Rezerwacji</th><th style="text-align:right">Wartość</th></tr></thead>
-      <tbody>${noviSorted.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.p_dt?c.p_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody>
-    </table>`:'<div class="empty">Brak nowych klientów w tym okresie.</div>'}
-  </div>
-  <div id="klienci-list-returning" class="card" style="display:none">
-    <p class="clabel">Powracający klienci (${d.studioReturning.length})</p>
-    ${d.studioReturning.length?`<table class="dtable">
-      <thead><tr><th>Imię i nazwisko</th><th>Powrót</th><th style="text-align:right">Przerwa</th><th style="text-align:right">Wszystkich wizyt</th><th style="text-align:right">Wartość</th></tr></thead>
-      <tbody>${d.studioReturning.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.returnDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.gap} dni</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody>
-    </table>`:'<div class="empty">Brak powracających klientów w tym okresie.</div>'}
-  </div>
-  <div id="klienci-list-lost" class="card" style="display:none">
-    <p class="clabel">Klienci którzy odeszli (${d.studioOdeszli.length})</p>
-    ${d.studioOdeszli.length?`<table class="dtable">
-      <thead><tr><th>Imię i nazwisko</th><th>Ostatnia wizyta</th><th style="text-align:right">Dni temu</th><th style="text-align:right">Wizyt</th><th style="text-align:right">Wartość</th></tr></thead>
-      <tbody>${d.studioOdeszli.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.lastDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.daysSince}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody>
-    </table>`:'<div class="empty">Brak klientów którzy odeszli w tym okresie.</div>'}
   </div>
   <div class="mgrid2">
     <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
@@ -1183,6 +1242,9 @@ function renderKlienci(d){
     <p class="clabel">Top 15 klientów wg wartości</p>
     ${sorted.slice(0,15).map(c=>{const p=Math.round(c.wartosc/maxV*100);return barRow(c.name,p,'#8e44ad',`${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak danych.</div>'}
   </div>`;
+  // Cache data for expand render
+  window.klienciExpandData={aktywni:allSorted,nowi:noviSorted,returning:d.studioReturning,lost:d.studioOdeszli};
+  if(window.activeKlienciExpand)renderKlienciExpand(window.activeKlienciExpand);
 }
 
 let currentPeriod='range';
@@ -1312,6 +1374,18 @@ function closePodsumChart(){
   if(chartInstances['podsum-chart']){chartInstances['podsum-chart'].destroy();delete chartInstances['podsum-chart'];}
 }
 
+// Map kafelka key -> which row container to use (1=top, 2=middle, 3=bottom)
+const PRAC_KEY_ROW={
+  visits:1,value:1,avgvisit:1,occupancy:1,
+  avgactivity:2,switchOut:2,switchIn:2,lost:2,
+  returning:3
+};
+
+function getPracTrenerName(nId){
+  const all=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.pracownik).filter(Boolean))];
+  return all.find(t=>t.replace(/[^a-zA-Z0-9]/g,'_')===nId);
+}
+
 function togglePracChart(nId,key){
   if(!window.activePracChart)window.activePracChart={};
   if(window.activePracChart[nId]===key){
@@ -1319,16 +1393,92 @@ function togglePracChart(nId,key){
     return;
   }
   window.activePracChart[nId]=key;
-  document.getElementById('prac-chart-box-'+nId).style.display='block';
+  // Render expand into appropriate row
+  const row=PRAC_KEY_ROW[key]||1;
+  ['1','2','3'].forEach(r=>{const el=document.getElementById('prac-expand-row'+r+'-'+nId);if(el)el.style.display='none';});
+  const box=document.getElementById('prac-expand-row'+row+'-'+nId);
+  if(!box)return;
+  // Generate chart container HTML and inject
+  box.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <p class="clabel" id="prac-chart-title-${nId}" style="margin:0">—</p>
+      <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+    </div>
+    <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-chart-gran-${nId}">—</p>
+    <div class="chart-box"><canvas id="prac-chart-${nId}"></canvas></div>`;
+  box.style.display='block';
   renderPracChart(nId,key);
 }
 
 function closePracChart(nId){
   if(window.activePracChart)delete window.activePracChart[nId];
-  const box=document.getElementById('prac-chart-box-'+nId);
-  if(box)box.style.display='none';
+  ['1','2','3'].forEach(r=>{const el=document.getElementById('prac-expand-row'+r+'-'+nId);if(el)el.style.display='none';});
   const cId='prac-chart-'+nId;
   if(chartInstances[cId]){chartInstances[cId].destroy();delete chartInstances[cId];}
+}
+
+function togglePracInline(nId,key){
+  // For switchOut, switchIn -> show only list (row 2)
+  // For lost, returning -> show chart + list (row 2 for lost, row 3 for returning)
+  if(!window.activePracChart)window.activePracChart={};
+  if(window.activePracChart[nId]===key){
+    closePracChart(nId);
+    return;
+  }
+  window.activePracChart[nId]=key;
+  const row=PRAC_KEY_ROW[key]||2;
+  ['1','2','3'].forEach(r=>{const el=document.getElementById('prac-expand-row'+r+'-'+nId);if(el)el.style.display='none';});
+  const box=document.getElementById('prac-expand-row'+row+'-'+nId);
+  if(!box)return;
+  const trener=getPracTrenerName(nId);
+  if(!trener)return;
+
+  // Build content based on key
+  if(key==='switchOut'){
+    const arr=[...((['Zakończone'].includes('x')?[]:[]))]; // dummy - we use d.trainerSwitchesOut but d not available here
+    // We need access to the data - pull from cached d via window
+    const list=window.pracDataCache?(window.pracDataCache.trainerSwitchesOut[trener]||[]):[];
+    box.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <p class="clabel" style="margin:0">Odeszli do innego trenera (${list.length})</p>
+        <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      ${list.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Data zmiany</th><th>Nowy trener</th></tr></thead><tbody>${list.sort((a,b)=>b.data-a.data).map(s=>`<tr><td>${s.klient}</td><td style="color:var(--text3)">${s.data.toLocaleDateString('pl')}</td><td>${s.drugiTrener}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak zmian w tym okresie.</div>'}`;
+    box.style.display='block';
+  }else if(key==='switchIn'){
+    const list=window.pracDataCache?(window.pracDataCache.trainerSwitchesIn[trener]||[]):[];
+    box.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <p class="clabel" style="margin:0">Przyszli od innego trenera (${list.length})</p>
+        <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      ${list.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Data zmiany</th><th>Poprzedni trener</th></tr></thead><tbody>${list.sort((a,b)=>b.data-a.data).map(s=>`<tr><td>${s.klient}</td><td style="color:var(--text3)">${s.data.toLocaleDateString('pl')}</td><td>${s.drugiTrener}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak zmian w tym okresie.</div>'}`;
+    box.style.display='block';
+  }else if(key==='lost'){
+    const list=window.pracDataCache?(window.pracDataCache.trainerOdeszli[trener]||[]):[];
+    box.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <p class="clabel" id="prac-chart-title-${nId}" style="margin:0">Klienci którzy odeszli — ${trener} (${list.length})</p>
+        <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-chart-gran-${nId}">—</p>
+      <div class="chart-box" style="margin-bottom:1rem"><canvas id="prac-chart-${nId}"></canvas></div>
+      ${list.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Ostatnia wizyta</th><th style="text-align:right">Dni temu</th><th style="text-align:right">Wizyt</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.lastDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.daysSince}</td><td style="text-align:right">${c.rez}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>'}`;
+    box.style.display='block';
+    renderPracChart(nId,key);
+  }else if(key==='returning'){
+    const list=window.pracDataCache?(window.pracDataCache.trainerReturning[trener]||[]):[];
+    box.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <p class="clabel" id="prac-chart-title-${nId}" style="margin:0">Powracający klienci — ${trener} (${list.length})</p>
+        <button onclick="closePracChart('${nId}')" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-chart-gran-${nId}">—</p>
+      <div class="chart-box" style="margin-bottom:1rem"><canvas id="prac-chart-${nId}"></canvas></div>
+      ${list.length?`<table class="dtable"><thead><tr><th>Klient</th><th>Powrót</th><th style="text-align:right">Przerwa</th><th style="text-align:right">Wizyt</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.returnDt.toLocaleDateString('pl')}</td><td style="text-align:right;color:var(--text3)">${c.gap} dni</td><td style="text-align:right">${c.rez}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>'}`;
+    box.style.display='block';
+    renderPracChart(nId,key);
+  }
 }
 
 function renderPracChart(nId,key){
