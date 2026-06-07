@@ -684,7 +684,7 @@ function getFiltered(){
   });
 }
 
-function zakonczone(data){return data.filter(r=>r.status==='Zakończone');}
+function zakonczone(data){return data.filter(r=>r.status==='Zakończone'||r.status==='Nieobecność');}
 
 function simplifyService(s){
   return (s||'').trim() || '(bez nazwy)';
@@ -785,7 +785,7 @@ function getCommonData(){
 
   // ======== ANALIZA TRENERÓW: czas aktywności, zmiany trenera, churn ========
   // Dla każdego trenera zbieramy wizyty z całej bazy (nie tylko filtrowane)
-  const allVisits=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt).sort((a,b)=>a.dt-b.dt);
+  const allVisits=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt).sort((a,b)=>a.dt-b.dt);
 
   // Grupowanie: clientVisits[klient] = [{dt, pracownik}, ...] chronologicznie
   const clientVisits={};
@@ -1017,18 +1017,19 @@ function renderPracownicy(d){
       <div id="prac-expand-row1-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
       <div class="mgrid4" style="margin-bottom:.5rem">
         ${mkt('avgactivity','Śr. czas aktywności klienta',(avgAct?Math.round(avgAct/30)+' mies.':'—'),(avgAct?avgAct+' dni':'brak danych'),'neutral')}
+        ${mkt('noshow','Nieobecności',pd.noshows||0,'no-show klientów',(pd.noshows===0?'good':pd.noshows<=3?'neutral':'bad'))}
         <div class="mc clickable-mc" onclick="togglePracInline('${nId}','switchOut')"><div class="mlbl">Odeszli do innego trenera ▾</div><div class="mval">${switchedOut}</div><div class="msub neutral">w studiu</div></div>
         <div class="mc clickable-mc" onclick="togglePracInline('${nId}','switchIn')"><div class="mlbl">Przyszli od innego trenera ▾</div><div class="mval">${switchedIn}</div><div class="msub neutral">w studiu</div></div>
-        <div class="mc clickable-mc" onclick="togglePracInline('${nId}','lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${odeszliList.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
       </div>
       <div id="prac-expand-row2-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
-      <div class="mgrid2" style="margin-bottom:.5rem">
+      <div class="mgrid4" style="margin-bottom:.5rem">
+        <div class="mc clickable-mc" onclick="togglePracInline('${nId}','lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${odeszliList.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
         <div class="mc clickable-mc" onclick="togglePracInline('${nId}','returning')"><div class="mlbl">Powracający klienci ▾</div><div class="mval">${returningList.length}</div><div class="msub good">po ≥30 dniach przerwy</div></div>
         <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(returningList.length-odeszliList.length)>=0?'var(--green)':'#c0392b'}">${(returningList.length-odeszliList.length)>=0?'+':''}${returningList.length-odeszliList.length}</div><div class="msub neutral">Powr. - Odeszli</div></div>
+        <div class="mc"><div class="mlbl">Klientów obsłużonych</div><div class="mval">${pd.klienci.size}</div><div class="msub neutral">unikalnych</div></div>
       </div>
       <div id="prac-expand-row3-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
       <div class="brow"><span class="blbl">udział w wizytach</span><div class="btrack"><div class="bfill" style="width:${pct}%;background:var(--green)"></div></div><span class="bval">${pd.wizyty} / ${d.total}</span></div>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px">Klientów obsłużonych: ${pd.klienci.size} · No-show: ${pd.noshows||0}</div>
     </div>`;
   }).join('');
 
@@ -1085,7 +1086,7 @@ function renderKlienciExpand(key){
   const pt=document.getElementById('pt')?.value;
   const from=pf?new Date(pf):new Date('2024-08-01');
   const to=pt?new Date(pt):new Date();
-  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt&&w.dt>=from&&w.dt<=to);
+  const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to);
   let chartData=[],color='#8e44ad',type='bar',yFormat=null;
   const initMap=()=>{const m={};periods.forEach(p=>m[p]=0);return m;};
   if(key==='all'){
@@ -1165,7 +1166,7 @@ function toggleTrainerFilter(name){
 }
 
 function selectAllTrainersFilter(){
-  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone');
+  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'||w.status==='Nieobecność');
   window.selectedTrainers=new Set([...new Set(zakonczone.map(w=>w.pracownik).filter(Boolean))]);
   updateAllSections();
 }
@@ -1289,7 +1290,7 @@ function periodLabel(key,gran){
 
 function getSortedPeriods(gran){
   const set=new Set();
-  DB.wizyty.forEach(w=>{if(w.dt&&w.status==='Zakończone')set.add(periodKey(w.dt,gran));});
+  DB.wizyty.forEach(w=>{if(w.dt&&(w.status==='Zakończone'||w.status==='Nieobecność'))set.add(periodKey(w.dt,gran));});
   return [...set].sort();
 }
 
@@ -1344,7 +1345,7 @@ function getAutoPeriods(gran){
     // Use studio open date fallback
     from=new Date('2024-08-01');
   }
-  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt&&w.dt>=from&&w.dt<=to);
+  const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to);
   const set=new Set();
   zakonczone.forEach(w=>{set.add(periodKeyExt(w.dt,gran));});
   return[...set].sort();
@@ -1382,12 +1383,12 @@ function closePodsumChart(){
 // Map kafelka key -> which row container to use (1=top, 2=middle, 3=bottom)
 const PRAC_KEY_ROW={
   visits:1,value:1,avgvisit:1,occupancy:1,
-  avgactivity:2,switchOut:2,switchIn:2,lost:2,
-  returning:3
+  avgactivity:2,noshow:2,switchOut:2,switchIn:2,
+  lost:3,returning:3
 };
 
 function getPracTrenerName(nId){
-  const all=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.pracownik).filter(Boolean))];
+  const all=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone'||w.status==='Nieobecność').map(w=>w.pracownik).filter(Boolean))];
   return all.find(t=>t.replace(/[^a-zA-Z0-9]/g,'_')===nId);
 }
 
@@ -1488,7 +1489,7 @@ function togglePracInline(nId,key){
 
 function renderPracChart(nId,key){
   // Find trainer name from pracMap (need to reverse from nId)
-  const allTrainers=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.pracownik).filter(Boolean))];
+  const allTrainers=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone'||w.status==='Nieobecność').map(w=>w.pracownik).filter(Boolean))];
   const trener=allTrainers.find(t=>t.replace(/[^a-zA-Z0-9]/g,'_')===nId);
   if(!trener)return;
 
@@ -1500,7 +1501,7 @@ function renderPracChart(nId,key){
   const pt=document.getElementById('pt')?.value;
   const from=pf?new Date(pf):new Date('2024-08-01');
   const to=pt?new Date(pt):new Date();
-  const trainerVisits=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.pracownik===trener&&w.dt&&w.dt>=from&&w.dt<=to);
+  const trainerVisits=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.pracownik===trener&&w.dt&&w.dt>=from&&w.dt<=to);
 
   const titleMap={
     visits:'Wizyty — '+trener,
@@ -1508,6 +1509,7 @@ function renderPracChart(nId,key){
     avgvisit:'Śr. wartość / wizytę — '+trener,
     occupancy:'Wypełnienie grafiku — '+trener,
     avgactivity:'Śr. czas aktywności klienta — '+trener,
+    noshow:'Nieobecności — '+trener,
     returning:'Powracający klienci — '+trener,
     lost:'Klienci którzy odeszli — '+trener
   };
@@ -1541,6 +1543,11 @@ function renderPracChart(nId,key){
     data=periods.map(p=>m[p]);
     type='bar';color='#2980b9';
     document.getElementById('prac-chart-title-'+nId).textContent='Liczba wizyt (proxy obłożenia) — '+trener;
+  }else if(key==='noshow'){
+    const m=initMap();
+    DB.wizyty.filter(w=>w.status==='Nieobecność'&&w.pracownik===trener&&w.dt&&w.dt>=from&&w.dt<=to).forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]++;});
+    data=periods.map(p=>m[p]);
+    type='bar';color='#c0392b';
   }else if(key==='avgactivity'){
     // For each period, compute avg days between first and last visit at this trainer for clients active in period
     data=periods.map(p=>{
@@ -1554,7 +1561,7 @@ function renderPracChart(nId,key){
       trainerVisits.forEach(w=>{if(w.dt>=pFrom&&w.dt<=pTo&&w.klient)clientsInPeriod.add(w.klient);});
       const days=[];
       clientsInPeriod.forEach(klient=>{
-        const v=DB.wizyty.filter(x=>x.status==='Zakończone'&&x.klient===klient&&x.pracownik===trener&&x.dt).sort((a,b)=>a.dt-b.dt);
+        const v=DB.wizyty.filter(x=>(x.status==='Zakończone'||x.status==='Nieobecność')&&x.klient===klient&&x.pracownik===trener&&x.dt).sort((a,b)=>a.dt-b.dt);
         if(v.length<2)return;
         const effLast=v[v.length-1].dt>new Date()?new Date():v[v.length-1].dt;
         const d=Math.round((effLast-v[0].dt)/(1000*60*60*24));
@@ -1572,7 +1579,7 @@ function renderPracChart(nId,key){
       else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
       else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
       // Find clients who were at this trainer in this period, AND their last visit ANYWHERE was in this period AND ≥30 days ago
-      const allVisits=DB.wizyty.filter(x=>x.status==='Zakończone'&&x.dt);
+      const allVisits=DB.wizyty.filter(x=>(x.status==='Zakończone'||x.status==='Nieobecność')&&x.dt);
       // Group by client
       const byClient={};
       allVisits.forEach(w=>{if(!byClient[w.klient])byClient[w.klient]=[];byClient[w.klient].push(w);});
@@ -1596,7 +1603,7 @@ function renderPracChart(nId,key){
       else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
       else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
       const visitsByClient={};
-      DB.wizyty.filter(x=>x.status==='Zakończone'&&x.pracownik===trener&&x.dt).forEach(w=>{if(!visitsByClient[w.klient])visitsByClient[w.klient]=[];visitsByClient[w.klient].push(w.dt);});
+      DB.wizyty.filter(x=>(x.status==='Zakończone'||x.status==='Nieobecność')&&x.pracownik===trener&&x.dt).forEach(w=>{if(!visitsByClient[w.klient])visitsByClient[w.klient]=[];visitsByClient[w.klient].push(w.dt);});
       let count=0;
       Object.entries(visitsByClient).forEach(([klient,dates])=>{
         dates.sort((a,b)=>a-b);
@@ -1630,7 +1637,7 @@ function renderPodsumChart(key){
   const pt=document.getElementById('pt')?.value;
   const from=pf?new Date(pf):new Date('2024-08-01');
   const to=pt?new Date(pt):new Date();
-  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt&&w.dt>=from&&w.dt<=to);
+  const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to);
 
   const titleMap={
     visits:'Wizyty zakończone',
@@ -1792,10 +1799,10 @@ function renderTrendCharts(){
   const pt=document.getElementById('pt')?.value;
   const from=pf?new Date(pf):new Date('2024-08-01');
   const to=pt?new Date(pt):new Date();
-  const zakonczone=DB.wizyty.filter(w=>w.status==='Zakończone'&&w.dt&&w.dt>=from&&w.dt<=to);
+  const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to);
 
   // ======== PRACOWNICY: multi-line ========
-  const allTrainers=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.pracownik).filter(Boolean))].sort();
+  const allTrainers=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone'||w.status==='Nieobecność').map(w=>w.pracownik).filter(Boolean))].sort();
   const trainers=window.selectedTrainers?allTrainers.filter(t=>window.selectedTrainers.has(t)):allTrainers;
 
   const trainerVisits={};trainers.forEach(t=>{trainerVisits[t]={};periods.forEach(p=>trainerVisits[t][p]=0);});
@@ -1815,7 +1822,7 @@ function renderTrendCharts(){
   })),(v)=>v.toLocaleString('pl')+' zł');
 
   // ======== USŁUGI: multi-line ========
-  const services=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone').map(w=>w.usluga).filter(Boolean))].sort();
+  const services=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone'||w.status==='Nieobecność').map(w=>w.usluga).filter(Boolean))].sort();
   const serviceVisits={};services.forEach(s=>{serviceVisits[s]={};periods.forEach(p=>serviceVisits[s][p]=0);});
   zakonczone.forEach(w=>{if(w.dt&&w.usluga){const k=periodKeyExt(w.dt,gran);if(serviceVisits[w.usluga]&&k in serviceVisits[w.usluga])serviceVisits[w.usluga][k]++;}});
   makeChart('chart-services','line',labels,services.map((s,i)=>({
