@@ -952,20 +952,8 @@ function renderPodsumowanie(d){
   <div class="mgrid4">
     ${mk('visits','Wizyty zakończone',d.total,'w wybranym okresie','neutral')}
     ${mk('value','Wartość zrealizowanych usług',d.val.toLocaleString('pl')+' zł','śr. '+avgVal+' zł / wizytę','neutral')}
-    ${mk('noshow','No-show',d.noshows,(d.noshows===0?'brak nieobecności':'nieobecności'),(d.noshows===0?'good':d.noshows<=3?'neutral':'bad'))}
     ${mk('occupancy','Obłożenie studia',(d.grafPct!=null?d.grafPct+'%':'—'),(d.grafPct!=null?(d.grafPct>=70?'dobre':d.grafPct>=50?'średnie':'niskie')+' ('+d.maxSlots+' slotów)':'dni robocze × 15h × 4 miejsca'),(d.grafPct!=null?(d.grafPct>=70?'good':d.grafPct>=50?'neutral':'bad'):'neutral'))}
-  </div>
-  <div class="mgrid4">
-    ${mk('new','Nowi klienci',d.nowi.length,'pierwsza wizyta w okresie','neutral')}
-    ${mk('returning','Powracający',d.studioReturning.length,'po ≥30 dniach przerwy','good')}
-    ${mk('lost','Klienci którzy odeszli',d.studioOdeszli.length,'ostatnia wizyta ≥30 dni temu','bad')}
     ${mk('active','Aktywni klienci',d.aktywniKlienci.length,'wizyta ≤ 30 dni temu','good')}
-  </div>
-  <div class="mgrid4">
-    ${mk('inactive','Nieaktywni',d.nieaktywni.length,'bez wizyt ≥ 30 dni','neutral')}
-    ${mk('avgActivity','Śr. czas aktywności',Math.round(d.avgDni/30)+' mies.',d.avgDni+' dni','neutral')}
-    ${mk('ltv','Śr. LTV klienta',d.avgLTV.toLocaleString('pl')+' zł','śr. '+d.avgWizytyKlient+' wizyt / klient','neutral')}
-    <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'var(--green)':'#c0392b'}">${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'+':''}${d.nowi.length+d.studioReturning.length-d.studioOdeszli.length}</div><div class="msub neutral">Nowi+Powr.-Odeszli</div></div>
   </div>
   <div class="card">
     <p class="clabel">Obłożenie — dni tygodnia</p>
@@ -1053,7 +1041,33 @@ function renderPracownicy(d){
     <div class="chart-box"><canvas id="chart-trainers-value"></canvas></div>
   </div>`;
 
-  el.innerHTML=cards+trendsCard;
+  // Top kafelka: usługi zrealizowane przez pracowników (bez Krystiana i Pauli)
+  const EXCLUDED_OWNERS=['Krystian Bryniarski','Paula Stoch'];
+  const employeesData=list.filter(([n])=>!EXCLUDED_OWNERS.includes(n));
+  const employeesVisits=employeesData.reduce((s,[,pd])=>s+pd.wizyty,0);
+  const employeesValue=employeesData.reduce((s,[,pd])=>s+pd.wartosc,0);
+  const employeesAvg=employeesVisits?Math.round(employeesValue/employeesVisits):0;
+  const topCard=`<div class="card">
+    <p class="clabel">Pracownicy łącznie (bez ${EXCLUDED_OWNERS.join(' i ')})</p>
+    <div class="mgrid4">
+      <div class="mc clickable-mc" onclick="togglePracEmployeesChart()"><div class="mlbl">Wizyty zrealizowane ▾</div><div class="mval">${employeesVisits}</div><div class="msub neutral">w wybranym okresie</div></div>
+      <div class="mc"><div class="mlbl">Wartość usług</div><div class="mval">${employeesValue.toLocaleString('pl')} zł</div><div class="msub neutral">łącznie</div></div>
+      <div class="mc"><div class="mlbl">Śr. / wizytę</div><div class="mval">${employeesAvg} zł</div><div class="msub neutral">średnia</div></div>
+      <div class="mc"><div class="mlbl">Liczba pracowników</div><div class="mval">${employeesData.length}</div><div class="msub neutral">z danymi</div></div>
+    </div>
+    <div id="prac-employees-chart-box" style="display:none;margin-top:1rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <p class="clabel" style="margin:0">Wizyty zrealizowane przez pracowników</p>
+        <button onclick="closePracEmployeesChart()" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="prac-employees-chart-gran">—</p>
+      <div class="chart-box"><canvas id="prac-employees-chart"></canvas></div>
+    </div>
+  </div>`;
+
+  el.innerHTML=topCard+cards+trendsCard;
+  // If chart was open, re-render
+  if(window.activePracEmployeesChart)renderPracEmployeesChart();
 }
 
 function toggleKlienciExpand(key){
@@ -1074,7 +1088,7 @@ function closeKlienciExpand(){
 
 function renderKlienciExpand(key){
   const data=window.klienciExpandData;if(!data)return;
-  const titles={all:'Wszyscy klienci',new:'Nowi klienci',returning:'Powracający klienci',lost:'Klienci którzy odeszli'};
+  const titles={all:'Wszyscy klienci',active:'Aktywni klienci',new:'Nowi klienci',returning:'Powracający klienci',lost:'Klienci którzy odeszli'};
   const gran=getAutoGranularity();
   const granLabels={day:'dzienna',week:'tygodniowa',month:'miesięczna',quarter:'kwartalna'};
   document.getElementById('klienci-expand-title').textContent=titles[key];
@@ -1089,7 +1103,15 @@ function renderKlienciExpand(key){
   const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to);
   let chartData=[],color='#8e44ad',type='bar',yFormat=null;
   const initMap=()=>{const m={};periods.forEach(p=>m[p]=0);return m;};
-  if(key==='all'){
+  if(key==='active'){
+    // Active clients per period: clients who had a visit in that period
+    chartData=periods.map(p=>{
+      const cs=new Set();
+      zakonczone.forEach(w=>{if(periodKeyExt(w.dt,gran)===p&&w.klient)cs.add(w.klient);});
+      return cs.size;
+    });
+    color='#27ae60';type='line';
+  }else if(key==='all'){
     chartData=periods.map(p=>{
       const cs=new Set();
       zakonczone.forEach(w=>{if(periodKeyExt(w.dt,gran)===p&&w.klient)cs.add(w.klient);});
@@ -1144,7 +1166,15 @@ function renderKlienciExpand(key){
 
   // Render list
   const listEl=document.getElementById('klienci-expand-list');
-  if(key==='all'){
+  if(key==='active'){
+    // Active clients per period: clients who had a visit in that period
+    chartData=periods.map(p=>{
+      const cs=new Set();
+      zakonczone.forEach(w=>{if(periodKeyExt(w.dt,gran)===p&&w.klient)cs.add(w.klient);});
+      return cs.size;
+    });
+    color='#27ae60';type='line';
+  }else if(key==='all'){
     listEl.innerHTML=data.aktywni.length?`<table class="dtable"><thead><tr><th>Imię i nazwisko</th><th>Ostatnia wizyta</th><th style="text-align:right">Wizyt</th><th style="text-align:right">Wartość</th></tr></thead><tbody>${data.aktywni.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.o_dt?c.o_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak klientów.</div>';
   }else if(key==='new'){
     listEl.innerHTML=data.nowi.length?`<table class="dtable"><thead><tr><th>Imię i nazwisko</th><th>Pierwsza wizyta</th><th style="text-align:right">Rezerwacji</th><th style="text-align:right">Wartość</th></tr></thead><tbody>${data.nowi.map(c=>`<tr><td>${c.name}</td><td style="color:var(--text3)">${c.p_dt?c.p_dt.toLocaleDateString('pl'):'—'}</td><td style="text-align:right">${c.rez}</td><td style="text-align:right">${c.wartosc.toLocaleString('pl')} zł</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Brak.</div>';
@@ -1181,23 +1211,72 @@ function renderUslugi(d){
   const maxW=list[0]?.[1].wizyty||1;
   const el=document.getElementById('sec-uslugi');
   if(!list.length){el.innerHTML='<div class="empty">Brak danych usług. Wgraj plik lista_wizyt.</div>';return;}
-  el.innerHTML=`<div class="card">
-    <p class="clabel">Trendy — porównanie usług</p>
-    <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px">Granulacja dobrana automatycznie na podstawie wybranego okresu.</p>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:4px">Liczba wizyt zakończonych — per usługa</p>
-    <div class="chart-box" style="height:340px"><canvas id="chart-services"></canvas></div>
-  </div>`+`<div class="card"><p class="clabel">Popularność usług</p>`+
-    list.map(([u,ud])=>{
-      const pct=Math.round(ud.wizyty/maxW*100);
-      const avgV=ud.wizyty?Math.round(ud.wartosc/ud.wizyty):0;
-      return barRow(u,pct,'#2980b9',`${ud.wizyty} wizyt · śr. ${avgV} zł`);
-    }).join('')+`</div>`+
-    `<div class="card"><p class="clabel">Wartość usług</p>`+
-    list.map(([u,ud])=>{
-      const maxV=list.reduce((m,[,x])=>Math.max(m,x.wartosc),0)||1;
-      const pct=Math.round(ud.wartosc/maxV*100);
-      return barRow(u,pct,'#8e44ad',`${ud.wartosc.toLocaleString('pl')} zł`);
-    }).join('')+`</div>`;
+
+  // Kafelki dla każdej usługi + No-show (z Podsumowania)
+  window.uslugiDataCache=d;
+  const kafelki=list.map(([u,ud])=>{
+    const uId='u_'+u.replace(/[^a-zA-Z0-9]/g,'_');
+    const avgV=ud.wizyty?Math.round(ud.wartosc/ud.wizyty):0;
+    return`<div class="mc clickable-mc" onclick="toggleUslugaChart('${uId}','${u.replace(/'/g,"\\'")}')"><div class="mlbl" title="${u}">${u} ▾</div><div class="mval">${ud.wizyty}</div><div class="msub neutral">${avgV} zł / wizytę</div></div>`;
+  }).join('');
+  const noshowCard=`<div class="mc clickable-mc" onclick="toggleUslugaChart('noshow','No-show')"><div class="mlbl">No-show ▾</div><div class="mval">${d.noshows}</div><div class="msub ${d.noshows===0?'good':d.noshows<=3?'neutral':'bad'}">${d.noshows===0?'brak nieobecności':'nieobecności'}</div></div>`;
+
+  el.innerHTML=`
+  <div class="card">
+    <p class="clabel">Usługi w wybranym okresie</p>
+    <div class="mgrid4">${kafelki}${noshowCard}</div>
+    <div id="usluga-chart-box" style="display:none;margin-top:1rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <p class="clabel" id="usluga-chart-title" style="margin:0">—</p>
+        <button onclick="closeUslugaChart()" class="btn btn-outline" style="font-size:11px;padding:3px 10px">✕ Zamknij</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--text3);margin-bottom:8px" id="usluga-chart-gran">—</p>
+      <div class="chart-box"><canvas id="usluga-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="card"><p class="clabel">Popularność usług</p>${list.map(([u,ud])=>{const pct=Math.round(ud.wizyty/maxW*100);const avgV=ud.wizyty?Math.round(ud.wartosc/ud.wizyty):0;return barRow(u,pct,'#2980b9',`${ud.wizyty} wizyt · śr. ${avgV} zł`);}).join('')}</div>
+  <div class="card"><p class="clabel">Wartość usług</p>${list.map(([u,ud])=>{const maxV=list.reduce((m,[,x])=>Math.max(m,x.wartosc),0)||1;const pct=Math.round(ud.wartosc/maxV*100);return barRow(u,pct,'#8e44ad',`${ud.wartosc.toLocaleString('pl')} zł`);}).join('')}</div>`;
+
+  if(window.activeUslugaChart)renderUslugaChart(window.activeUslugaChart.uId,window.activeUslugaChart.name);
+}
+
+function toggleUslugaChart(uId,name){
+  if(window.activeUslugaChart&&window.activeUslugaChart.uId===uId){
+    closeUslugaChart();
+    return;
+  }
+  window.activeUslugaChart={uId,name};
+  document.getElementById('usluga-chart-box').style.display='block';
+  renderUslugaChart(uId,name);
+}
+
+function closeUslugaChart(){
+  window.activeUslugaChart=null;
+  const box=document.getElementById('usluga-chart-box');
+  if(box)box.style.display='none';
+  if(chartInstances['usluga-chart']){chartInstances['usluga-chart'].destroy();delete chartInstances['usluga-chart'];}
+}
+
+function renderUslugaChart(uId,name){
+  const gran=getAutoGranularity();
+  const granLabels={day:'dzienna',week:'tygodniowa',month:'miesięczna',quarter:'kwartalna'};
+  const periods=getAutoPeriods(gran);
+  const labels=periods.map(k=>periodLabelExt(k,gran));
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  const from=pf?new Date(pf):new Date('2024-08-01');
+  const to=pt?new Date(pt):new Date();
+  document.getElementById('usluga-chart-title').textContent=name;
+  document.getElementById('usluga-chart-gran').textContent=`Granulacja: ${granLabels[gran]} (dobrana automatycznie)`;
+  const m={};periods.forEach(p=>m[p]=0);
+  if(uId==='noshow'){
+    DB.wizyty.filter(w=>w.status==='Nieobecność'&&w.dt&&w.dt>=from&&w.dt<=to).forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]++;});
+    makeChart('usluga-chart','bar',labels,[{label:'No-show',data:periods.map(p=>m[p]),backgroundColor:'#c0392b',borderRadius:4}]);
+  }else{
+    // Match by usługa simplified name
+    DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to&&simplifyService(w.usluga)===name).forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]++;});
+    makeChart('usluga-chart','bar',labels,[{label:name,data:periods.map(p=>m[p]),backgroundColor:'#2980b9',borderRadius:4}]);
+  }
 }
 
 function renderKlienci(d){
@@ -1219,9 +1298,9 @@ function renderKlienci(d){
   el.innerHTML=`
   <div class="mgrid4">
     <div class="mc clickable-mc" onclick="toggleKlienciExpand('all')"><div class="mlbl">Wszyscy klienci ▾</div><div class="mval">${aktywni.length}</div><div class="msub neutral">z co najmniej 1 wizytą</div></div>
+    <div class="mc clickable-mc" onclick="toggleKlienciExpand('active')"><div class="mlbl">Aktywni klienci ▾</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 30 dni temu</div></div>
     <div class="mc clickable-mc" onclick="toggleKlienciExpand('new')"><div class="mlbl">Nowi klienci ▾</div><div class="mval">${d.nowi.length}</div><div class="msub neutral">pierwsza wizyta w okresie</div></div>
     <div class="mc clickable-mc" onclick="toggleKlienciExpand('returning')"><div class="mlbl">Powracający ▾</div><div class="mval">${d.studioReturning.length}</div><div class="msub good">po ≥30 dniach przerwy</div></div>
-    <div class="mc clickable-mc" onclick="toggleKlienciExpand('lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${d.studioOdeszli.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
   </div>
   <div id="klienci-expand" style="display:none;margin-top:1rem">
     <div class="card">
@@ -1235,21 +1314,20 @@ function renderKlienci(d){
     </div>
   </div>
   <div class="mgrid4">
-    <div class="mc"><div class="mlbl">Aktywni</div><div class="mval">${d.aktywniKlienci.length}</div><div class="msub good">wizyta ≤ 30 dni temu</div></div>
+    <div class="mc clickable-mc" onclick="toggleKlienciExpand('lost')"><div class="mlbl">Klienci którzy odeszli ▾</div><div class="mval">${d.studioOdeszli.length}</div><div class="msub bad">ostatnia wizyta ≥30 dni temu</div></div>
     <div class="mc"><div class="mlbl">Nieaktywni</div><div class="mval">${d.nieaktywni.length}</div><div class="msub neutral">bez wizyt ≥ 30 dni</div></div>
-    <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'var(--green)':'#c0392b'}">${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'+':''}${d.nowi.length+d.studioReturning.length-d.studioOdeszli.length}</div><div class="msub neutral">Nowi+Powr.-Odeszli</div></div>
+    <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
     <div class="mc"><div class="mlbl">Śr. LTV klienta</div><div class="mval">${d.avgLTV.toLocaleString('pl')} zł</div><div class="msub neutral">${d.avgWizytyKlient} wizyt / klient</div></div>
   </div>
-  <div class="mgrid2">
-    <div class="mc"><div class="mlbl">Śr. czas aktywności</div><div class="mval">${Math.round(d.avgDni/30)} mies.</div><div class="msub neutral">${d.avgDni} dni</div></div>
-    <div class="mc"><div class="mlbl">Śr. LTV klienta</div><div class="mval">${d.avgLTV.toLocaleString('pl')} zł</div><div class="msub neutral">śr. ${d.avgWizytyKlient} wizyt / klient</div></div>
+  <div class="mgrid4">
+    <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'var(--green)':'#c0392b'}">${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'+':''}${d.nowi.length+d.studioReturning.length-d.studioOdeszli.length}</div><div class="msub neutral">Nowi+Powr.-Odeszli</div></div>
   </div>
   <div class="card">
     <p class="clabel">Top 15 klientów wg wartości</p>
     ${sorted.slice(0,15).map(c=>{const p=Math.round(c.wartosc/maxV*100);return barRow(c.name,p,'#8e44ad',`${c.wartosc.toLocaleString('pl')} zł`);}).join('')||'<div class="empty">Brak danych.</div>'}
   </div>`;
   // Cache data for expand render
-  window.klienciExpandData={aktywni:allSorted,nowi:noviSorted,returning:d.studioReturning,lost:d.studioOdeszli};
+  window.klienciExpandData={aktywni:allSorted,active:[...d.aktywniKlienci].sort((a,b)=>(b.o_dt||0)-(a.o_dt||0)),nowi:noviSorted,returning:d.studioReturning,lost:d.studioOdeszli};
   if(window.activeKlienciExpand)renderKlienciExpand(window.activeKlienciExpand);
 }
 
@@ -1791,6 +1869,38 @@ function renderPodsumChart(key){
   makeChart('podsum-chart',type,labels,[dataset],yFormat);
 }
 
+function togglePracEmployeesChart(){
+  if(window.activePracEmployeesChart){closePracEmployeesChart();return;}
+  window.activePracEmployeesChart=true;
+  document.getElementById('prac-employees-chart-box').style.display='block';
+  renderPracEmployeesChart();
+}
+
+function closePracEmployeesChart(){
+  window.activePracEmployeesChart=false;
+  const box=document.getElementById('prac-employees-chart-box');
+  if(box)box.style.display='none';
+  if(chartInstances['prac-employees-chart']){chartInstances['prac-employees-chart'].destroy();delete chartInstances['prac-employees-chart'];}
+}
+
+function renderPracEmployeesChart(){
+  const EXCLUDED=['Krystian Bryniarski','Paula Stoch'];
+  const gran=getAutoGranularity();
+  const granLabels={day:'dzienna',week:'tygodniowa',month:'miesięczna',quarter:'kwartalna'};
+  const periods=getAutoPeriods(gran);
+  const labels=periods.map(k=>periodLabelExt(k,gran));
+  const pf=document.getElementById('pf')?.value;
+  const pt=document.getElementById('pt')?.value;
+  const from=pf?new Date(pf):new Date('2024-08-01');
+  const to=pt?new Date(pt):new Date();
+  const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to&&w.pracownik&&!EXCLUDED.includes(w.pracownik));
+  const m={};periods.forEach(p=>m[p]=0);
+  zakonczone.forEach(w=>{const k=periodKeyExt(w.dt,gran);if(k in m)m[k]++;});
+  const data=periods.map(p=>m[p]);
+  document.getElementById('prac-employees-chart-gran').textContent=`Granulacja: ${granLabels[gran]} (dobrana automatycznie)`;
+  makeChart('prac-employees-chart','bar',labels,[{label:'Wizyty pracowników',data,backgroundColor:'#126f43',borderRadius:4}]);
+}
+
 function renderTrendCharts(){
   const gran=getAutoGranularity();
   const periods=getAutoPeriods(gran);
@@ -1821,15 +1931,7 @@ function renderTrendCharts(){
     fill:false,tension:.3,pointRadius:3
   })),(v)=>v.toLocaleString('pl')+' zł');
 
-  // ======== USŁUGI: multi-line ========
-  const services=[...new Set(DB.wizyty.filter(w=>w.status==='Zakończone'||w.status==='Nieobecność').map(w=>w.usluga).filter(Boolean))].sort();
-  const serviceVisits={};services.forEach(s=>{serviceVisits[s]={};periods.forEach(p=>serviceVisits[s][p]=0);});
-  zakonczone.forEach(w=>{if(w.dt&&w.usluga){const k=periodKeyExt(w.dt,gran);if(serviceVisits[w.usluga]&&k in serviceVisits[w.usluga])serviceVisits[w.usluga][k]++;}});
-  makeChart('chart-services','line',labels,services.map((s,i)=>({
-    label:s,data:periods.map(p=>serviceVisits[s][p]),
-    borderColor:CHART_COLORS[i%CHART_COLORS.length],backgroundColor:CHART_COLORS[i%CHART_COLORS.length],
-    fill:false,tension:.3,pointRadius:3
-  })));
+  // (Usługi - wykres per-usługa teraz w toggleUslugaChart, nie ma tu wielkiego porównawczego)
 
   // Re-render any open per-trainer charts
   if(window.activePracChart){
