@@ -446,10 +446,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(k){document.getElementById('api-key').value=k;setKeyOk();}
   const today=new Date();
   const from=new Date(); from.setDate(today.getDate()-30);
-  document.getElementById('dt').value=today.toISOString().split('T')[0];
-  document.getElementById('df').value=from.toISOString().split('T')[0];
-  document.getElementById('pt').value=today.toISOString().split('T')[0];
-  document.getElementById('pf').value=from.toISOString().split('T')[0];
+  document.getElementById('dt').value=toDateStr(today);
+  document.getElementById('df').value=toDateStr(from);
+  document.getElementById('pt').value=toDateStr(today);
+  document.getElementById('pf').value=toDateStr(from);
   updateAllSections();
 });
 function saveKey(){
@@ -677,7 +677,7 @@ function getFiltered(){
   if(!df&&!dt)return DB.wizyty;
   return DB.wizyty.filter(r=>{
     if(!r.dt)return true;
-    const d=r.dt.toISOString().split('T')[0];
+    const d=toDateStr(r.dt);
     if(df&&d<df)return false;
     if(dt&&d>dt)return false;
     return true;
@@ -714,7 +714,7 @@ function getPreviewFiltered(){
   if(!pf&&!pt)return DB.wizyty;
   return DB.wizyty.filter(r=>{
     if(!r.dt)return true;
-    const d=r.dt.toISOString().split('T')[0];
+    const d=toDateStr(r.dt);
     if(pf&&d<pf)return false;
     if(pt&&d>pt)return false;
     return true;
@@ -727,7 +727,7 @@ function getPreviewFiltered(){
   if(!pf&&!pt)return DB.wizyty;
   return DB.wizyty.filter(r=>{
     if(!r.dt)return true;
-    const d=r.dt.toISOString().split('T')[0];
+    const d=toDateStr(r.dt);
     if(pf&&d<pf)return false;
     if(pt&&d>pt)return false;
     return true;
@@ -755,7 +755,7 @@ function getCommonData(){
   z.forEach(r=>{if(r.dt){const h=r.dt.getHours();hC[h]=(hC[h]||0)+1;}});
 
   const aktywni=DB.klienci.filter(c=>c.rez>0);
-  const nowi=DB.klienci.filter(c=>{if(!c.p_dt||c.rez===0)return false;const d=c.p_dt.toISOString().split('T')[0];if(pf&&d<pf)return false;if(pt&&d>pt)return false;return true;});
+  const nowi=DB.klienci.filter(c=>{if(!c.p_dt||c.rez===0)return false;const d=toDateStr(c.p_dt);if(pf&&d<pf)return false;if(pt&&d>pt)return false;return true;});
   const aktywniKlienci=DB.klienci.filter(c=>c.o_dt&&c.o_dt>=cutoff&&c.rez>0);
   const nieaktywni=DB.klienci.filter(c=>c.grupy.includes('Nieaktywni')&&c.rez>0);
   const dniList=aktywni.filter(c=>c.days!=null&&c.days>0).map(c=>c.days);
@@ -1974,7 +1974,7 @@ function buildContext(){
   const aktywni=DB.klienci.filter(c=>c.rez>0);
   const nowi=DB.klienci.filter(c=>{
     if(!c.p_dt||c.rez===0)return false;
-    const d=c.p_dt.toISOString().split('T')[0];
+    const d=toDateStr(c.p_dt);
     if(df&&d<df)return false;
     if(dt&&d>dt)return false;
     return true;
