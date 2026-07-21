@@ -929,7 +929,29 @@ function getCommonData(){
     trainerReturning[trener].sort((a,b)=>b.returnDt-a.returnDt);
   });
 
-  return{z,pracMap,usMap,dni,dniC,hC,aktywni,nowi,aktywniKlienci,nieaktywni,avgDni,avgLTV,avgWizytyKlient,grafPct,noshows,val,total:z.length,maxSlots,workdays,trainerAvgActivity,trainerSwitchesOut,trainerSwitchesIn,trainerOdeszli,studioOdeszli,trainerReturning,studioReturning};
+  // ======== ŚR. WIZYT / KLIENT / MIESIĄC ========
+  // Widoczne tylko gdy okres to 28-31 dni (miesiąc kalendarzowy lub ~4 tygodnie)
+  let visitsPerClientMonth=null; // for studio
+  const trainerVisitsPerClientMonth={};
+  const periodDays=(periodFrom&&periodTo)?Math.round((periodTo-periodFrom)/(1000*60*60*24))+1:null;
+  const isMonthlyView=periodDays!==null&&periodDays>=28&&periodDays<=31;
+  if(isMonthlyView){
+    // Studio: for each client who had a visit in period, count their visits in period
+    const clientsInPeriod={};
+    z.forEach(w=>{if(!w.klient||!w.dt)return;if(!clientsInPeriod[w.klient])clientsInPeriod[w.klient]=0;clientsInPeriod[w.klient]++;});
+    const activeCount=Object.keys(clientsInPeriod).length;
+    const totalVisits=Object.values(clientsInPeriod).reduce((s,c)=>s+c,0);
+    visitsPerClientMonth=activeCount>0?+(totalVisits/activeCount).toFixed(1):0;
+    // Per trainer: for each trainer, count visits per client at that trainer in period
+    Object.entries(pracMap).forEach(([trener,pd])=>{
+      const clientsAtTrainer={};
+      z.forEach(w=>{if(w.pracownik===trener&&w.klient){if(!clientsAtTrainer[w.klient])clientsAtTrainer[w.klient]=0;clientsAtTrainer[w.klient]++;}});
+      const count=Object.keys(clientsAtTrainer).length;
+      const total=Object.values(clientsAtTrainer).reduce((s,c)=>s+c,0);
+      trainerVisitsPerClientMonth[trener]=count>0?+(total/count).toFixed(1):0;
+    });
+  }
+  return{z,pracMap,usMap,dni,dniC,hC,aktywni,nowi,aktywniKlienci,nieaktywni,avgDni,avgLTV,avgWizytyKlient,grafPct,noshows,val,total:z.length,maxSlots,workdays,trainerAvgActivity,trainerSwitchesOut,trainerSwitchesIn,trainerOdeszli,studioOdeszli,trainerReturning,studioReturning,visitsPerClientMonth,isMonthlyView,trainerVisitsPerClientMonth};
 }
 
 function barRow(label,pct,color,valText){
@@ -955,6 +977,7 @@ function renderPodsumowanie(d){
     ${mk('occupancy','Obłożenie studia',(d.grafPct!=null?d.grafPct+'%':'—'),(d.grafPct!=null?(d.grafPct>=70?'dobre':d.grafPct>=50?'średnie':'niskie')+' ('+d.maxSlots+' slotów)':'dni robocze × 15h × 4 miejsca'),(d.grafPct!=null?(d.grafPct>=70?'good':d.grafPct>=50?'neutral':'bad'):'neutral'))}
     ${mk('active','Aktywni klienci',d.aktywniKlienci.length,'wizyta ≤ 30 dni temu','good')}
   </div>
+  ${d.isMonthlyView?`<div class="mgrid4"><div class="mc"><div class="mlbl">Śr. wizyt / klient / miesiąc</div><div class="mval">${d.visitsPerClientMonth}</div><div class="msub neutral">aktywni klienci w okresie</div></div></div>`:''}
   <div class="card">
     <p class="clabel">Obłożenie — dni tygodnia</p>
     <div class="hgrid">${d.dni.map((dn,i)=>{const p=Math.round(d.dniC[i]/Math.max(...d.dniC,1)*100);return`<div class="hcell"><div class="hnum">${d.dniC[i]}</div><div style="margin:4px 0;height:36px;background:var(--bg);border:1px solid var(--border);border-radius:3px;overflow:hidden;display:flex;align-items:flex-end"><div style="width:100%;height:${p}%;background:var(--green);border-radius:2px"></div></div><div class="hlbl">${dn}</div></div>`;}).join('')}</div>
@@ -1015,6 +1038,7 @@ function renderPracownicy(d){
         <div class="mc clickable-mc" onclick="togglePracInline('${nId}','returning')"><div class="mlbl">Powracający klienci ▾</div><div class="mval">${returningList.length}</div><div class="msub good">po ≥30 dniach przerwy</div></div>
         <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(returningList.length-odeszliList.length)>=0?'var(--green)':'#c0392b'}">${(returningList.length-odeszliList.length)>=0?'+':''}${returningList.length-odeszliList.length}</div><div class="msub neutral">Powr. - Odeszli</div></div>
         <div class="mc"><div class="mlbl">Klientów obsłużonych</div><div class="mval">${pd.klienci.size}</div><div class="msub neutral">unikalnych</div></div>
+        ${d.isMonthlyView?`<div class="mc"><div class="mlbl">Śr. wizyt / klient / miesiąc</div><div class="mval">${d.trainerVisitsPerClientMonth[n]||0}</div><div class="msub neutral">u tego trenera</div></div>`:''}
       </div>
       <div id="prac-expand-row3-${nId}" class="prac-expand" style="display:none;margin-bottom:.5rem;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r)"></div>
       <div class="brow"><span class="blbl">udział w wizytach</span><div class="btrack"><div class="bfill" style="width:${pct}%;background:var(--green)"></div></div><span class="bval">${pd.wizyty} / ${d.total}</span></div>
@@ -1321,6 +1345,7 @@ function renderKlienci(d){
   </div>
   <div class="mgrid4">
     <div class="mc"><div class="mlbl">Saldo</div><div class="mval" style="color:${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'var(--green)':'#c0392b'}">${(d.nowi.length+d.studioReturning.length-d.studioOdeszli.length)>=0?'+':''}${d.nowi.length+d.studioReturning.length-d.studioOdeszli.length}</div><div class="msub neutral">Nowi+Powr.-Odeszli</div></div>
+    ${d.isMonthlyView?`<div class="mc"><div class="mlbl">Śr. wizyt / klient / miesiąc</div><div class="mval">${d.visitsPerClientMonth}</div><div class="msub neutral">aktywni klienci w okresie</div></div>`:''}
   </div>
   <div class="card">
     <p class="clabel">Top 15 klientów wg wartości</p>
