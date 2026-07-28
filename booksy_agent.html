@@ -1139,6 +1139,11 @@ function renderKlienciExpand(key){
   const from=pf?new Date(pf):new Date('2024-08-01');
   const to=pt?new Date(pt):new Date();
   const zakonczone=DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.dt>=from&&w.dt<=to);
+  // Pełna historia wizyt (CAŁA baza, nie tylko wybrany okres). Potrzebna do poprawnego
+  // liczenia powracających (trzeba widzieć wizytę sprzed słupka) i odchodzących
+  // (prawdziwa ostatnia wizyta może być poza oknem). cvAll[klient] = daty rosnąco.
+  const cvAll={};
+  DB.wizyty.filter(w=>(w.status==='Zakończone'||w.status==='Nieobecność')&&w.dt&&w.klient&&w.pracownik).sort((a,b)=>a.dt-b.dt).forEach(w=>{if(!cvAll[w.klient])cvAll[w.klient]=[];cvAll[w.klient].push(w.dt);});
   let chartData=[],color='#8e44ad',type='bar',yFormat=null;
   const initMap=()=>{const m={};periods.forEach(p=>m[p]=0);return m;};
   if(key==='active'){
@@ -1168,11 +1173,8 @@ function renderKlienciExpand(key){
       else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
       else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
       else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
-      const cv={};
-      zakonczone.forEach(w=>{if(w.klient&&w.dt){if(!cv[w.klient])cv[w.klient]=[];cv[w.klient].push(w.dt);}});
       let count=0;
-      Object.entries(cv).forEach(([klient,dates])=>{
-        dates.sort((a,b)=>a-b);
+      Object.entries(cvAll).forEach(([klient,dates])=>{
         const firstInP=dates.find(d=>d>=pFrom&&d<=pTo);
         if(!firstInP)return;
         const before=dates.filter(d=>d<firstInP);
@@ -1191,10 +1193,8 @@ function renderKlienciExpand(key){
       else if(gran==='week'){pFrom=new Date(p);pTo=new Date(p);pTo.setDate(pTo.getDate()+6);}
       else if(gran==='month'){const[y,mo]=p.split('-').map(Number);pFrom=new Date(y,mo-1,1);pTo=new Date(y,mo,0);}
       else{const[y,q]=p.split('-Q').map(Number);pFrom=new Date(y,(q-1)*3,1);pTo=new Date(y,q*3,0);}
-      const lvm={};
-      zakonczone.forEach(w=>{if(w.klient&&w.dt&&(!lvm[w.klient]||w.dt>lvm[w.klient]))lvm[w.klient]=w.dt;});
       let count=0;
-      Object.entries(lvm).forEach(([klient,lastDt])=>{if(lastDt>=pFrom&&lastDt<=pTo&&(now-lastDt)/(1000*60*60*24)>=30)count++;});
+      Object.entries(cvAll).forEach(([klient,dates])=>{const lastDt=dates[dates.length-1];if(lastDt>=pFrom&&lastDt<=pTo&&(now-lastDt)/(1000*60*60*24)>=30)count++;});
       return count;
     });
     color='#c0392b';type='bar';
@@ -1221,12 +1221,9 @@ function renderKlienciExpand(key){
       let newCount=0;
       DB.klienci.forEach(c=>{if(c.p_dt&&c.rez>0&&c.p_dt>=pFrom&&c.p_dt<=pTo)newCount++;});
 
-      // Powracający in period
-      const cv={};
-      zakonczone.forEach(w=>{if(w.klient&&w.dt){if(!cv[w.klient])cv[w.klient]=[];cv[w.klient].push(w.dt);}});
+      // Powracający in period (pełna historia klienta, nie tylko wybrany okres)
       let returningCount=0;
-      Object.entries(cv).forEach(([klient,dates])=>{
-        dates.sort((a,b)=>a-b);
+      Object.entries(cvAll).forEach(([klient,dates])=>{
         const firstInP=dates.find(d=>d>=pFrom&&d<=pTo);
         if(!firstInP)return;
         const before=dates.filter(d=>d<firstInP);
@@ -1235,11 +1232,9 @@ function renderKlienciExpand(key){
         if((firstInP-lastBefore)/(1000*60*60*24)>=30)returningCount++;
       });
 
-      // Klienci którzy odeszli in period: last visit in period AND ≥30 days ago
-      const lvm={};
-      zakonczone.forEach(w=>{if(w.klient&&w.dt&&(!lvm[w.klient]||w.dt>lvm[w.klient]))lvm[w.klient]=w.dt;});
+      // Klienci którzy odeszli in period (pełna historia — prawdziwa ostatnia wizyta)
       let lostCount=0;
-      Object.entries(lvm).forEach(([klient,lastDt])=>{if(lastDt>=pFrom&&lastDt<=pTo&&(now-lastDt)/(1000*60*60*24)>=30)lostCount++;});
+      Object.entries(cvAll).forEach(([klient,dates])=>{const lastDt=dates[dates.length-1];if(lastDt>=pFrom&&lastDt<=pTo&&(now-lastDt)/(1000*60*60*24)>=30)lostCount++;});
 
       return newCount+returningCount-lostCount;
     });
